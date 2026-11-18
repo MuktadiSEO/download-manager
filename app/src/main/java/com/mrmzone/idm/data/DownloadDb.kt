@@ -6,16 +6,23 @@ import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 
-class DownloadDb(ctx: Context) : SQLiteOpenHelper(ctx, "downloads.db", null, 1) {
+class DownloadDb(ctx: Context) : SQLiteOpenHelper(ctx, "downloads.db", null, 2) {
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("""CREATE TABLE downloads(
             id INTEGER PRIMARY KEY AUTOINCREMENT, url TEXT NOT NULL, file_name TEXT NOT NULL, category TEXT,
             total_size INTEGER, downloaded INTEGER, status TEXT, connections INTEGER, resumable INTEGER,
             created_at INTEGER, finished_at INTEGER, last_try INTEGER, error TEXT, segments TEXT,
             temp_path TEXT, final_path TEXT, referer TEXT, user_agent TEXT, cookies TEXT,
-            in_queue INTEGER, description TEXT, speed_limit INTEGER)""")
+            in_queue INTEGER, description TEXT, speed_limit INTEGER,
+            kind TEXT, format_spec TEXT, extra TEXT)""")
     }
-    override fun onUpgrade(db: SQLiteDatabase, o: Int, n: Int) {}
+    override fun onUpgrade(db: SQLiteDatabase, o: Int, n: Int) {
+        if (o < 2) {
+            db.execSQL("ALTER TABLE downloads ADD COLUMN kind TEXT")
+            db.execSQL("ALTER TABLE downloads ADD COLUMN format_spec TEXT")
+            db.execSQL("ALTER TABLE downloads ADD COLUMN extra TEXT")
+        }
+    }
 
     private fun values(d: DownloadItem) = ContentValues().apply {
         put("url", d.url); put("file_name", d.fileName); put("category", d.category.name)
@@ -26,6 +33,7 @@ class DownloadDb(ctx: Context) : SQLiteOpenHelper(ctx, "downloads.db", null, 1) 
         put("final_path", d.finalPath); put("referer", d.referer); put("user_agent", d.userAgent)
         put("cookies", d.cookies); put("in_queue", if (d.inQueue) 1 else 0)
         put("description", d.description); put("speed_limit", d.speedLimitKb)
+        put("kind", d.kind); put("format_spec", d.formatSpec); put("extra", d.extra)
     }
 
     @Synchronized fun insert(d: DownloadItem): Long {
@@ -57,6 +65,7 @@ class DownloadDb(ctx: Context) : SQLiteOpenHelper(ctx, "downloads.db", null, 1) 
             error = s("error"), segments = s("segments"), tempPath = s("temp_path"), finalPath = s("final_path"),
             referer = s("referer"), userAgent = s("user_agent"), cookies = s("cookies"),
             inQueue = l("in_queue") == 1L, description = s("description"), speedLimitKb = l("speed_limit").toInt(),
+            kind = s("kind"), formatSpec = s("format_spec"), extra = s("extra"),
         )
     }
 }

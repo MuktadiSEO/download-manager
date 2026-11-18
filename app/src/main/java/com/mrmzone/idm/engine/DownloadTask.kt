@@ -4,6 +4,9 @@ import android.content.Context
 import com.mrmzone.idm.data.DownloadItem
 import com.mrmzone.idm.data.Segment
 import com.mrmzone.idm.data.Status
+import com.yausername.youtubedl_android.YoutubeDL
+import com.yausername.youtubedl_android.YoutubeDLRequest
+import java.io.File
 import java.io.IOException
 import java.io.InputStream
 import java.io.RandomAccessFile
@@ -35,9 +38,17 @@ class DownloadTask(
     private lateinit var raf: RandomAccessFile
     val limiter = SpeedLimiter(item.speedLimitKb * 1024L)
 
-    fun cancel() { cancelled = true; workers.values.forEach { it.abort() }; interrupt() }
+    fun cancel() {
+        cancelled = true
+        workers.values.forEach { it.abort() }
+        if (item.isYtdlp) runCatching { YoutubeDL.getInstance().destroyProcessById(processId) }
+        interrupt()
+    }
+
+    private val processId get() = "mrm-${item.id}"
 
     override fun run() {
+        if (item.isYtdlp) { runYtdlp(); return }
         try {
             item.lastTry = System.currentTimeMillis()
             item.error = null
@@ -72,11 +83,83 @@ class DownloadTask(
         }
     }
 
+    /** Video sites (YouTube etc.): yt-dlp downloads the chosen quality, ffmpeg merges video+audio. */
+    private fun runYtdlp() {
+        val dir = File(ctx.getExternalFilesDir(null) ?: ctx.filesDir, "yt/${item.id}").apply { mkdirs() }
+        try {
+            item.lastTry = System.currentTimeMillis()
+            item.error = null
+            item.status = Status.CONNECTING
+            onUpdate(item)
+            Ytdlp.ensureInit(ctx)
+            if (cancelled) return finish(Status.PAUSED)
+            val req = YoutubeDLRequest(item.url)
+                .addOption("--no-playlist")
+                .addOption("-f", item.formatSpec ?: "bv*+ba/b")
+                .addOption("-o", File(dir, "media.%(ext)s").absolutePath)
+                .addOption("--no-mtime")
+                .addOption("--continue")
+                .addOption("--newline")
+                .addOption("--http-chunk-size", "10M")
+                .addOption("-N", item.connections.coerceIn(1, 16))
+                .addOption("--retries", DM.prefs.retries.coerceAtLeast(1))
+                .addOption("--fragment-retries", DM.prefs.retries.coerceAtLeast(1))
+            when (val ex = item.extra) {
+                "mp3" -> { req.addOption("-x"); req.addOption("--audio-format", "mp3"); req.addOption("--audio-quality", "0") }
+                "mp4", "webm", "mkv" -> req.addOption("--merge-output-format", ex)
+            }
+            val limitKb = listOf(item.speedLimitKb, DM.prefs.speedLimitKb).filter { it > 0 }.minOrNull()
+            if (limitKb != null) req.addOption("-r", "${limitKb}K")
+            if (!item.userAgent.isNullOrBlank()) req.addOption("--user-agent", item.userAgent!!)
+
+            val prog = Ytdlp.Progress()
+            var lastEmit = 0L
+            item.status = Status.DOWNLOADING
+            onUpdate(item)
+            YoutubeDL.getInstance().execute(req, processId) { pct, _, line ->
+                val merging = Ytdlp.parseLine(line, pct, prog) { done, _, speed ->
+                    item.downloaded = if (item.totalSize > 0) minOf(done, item.totalSize) else done
+                    if (speed >= 0) item.speed = speed
+                }
+                if (merging && item.status != Status.MOVING) { item.status = Status.MOVING; item.speed = 0; onUpdate(item) }
+                val now = System.currentTimeMillis()
+                if (now - lastEmit > 400) { lastEmit = now; item.activeConnections = 1; onUpdate(item) }
+            }
+            if (cancelled) return finish(Status.PAUSED)
+            // pick the finished media file
+            val outFile = dir.listFiles().orEmpty()
+                .filter { it.isFile && !it.name.endsWith(".part") && !it.name.endsWith(".ytdl") && !it.name.contains(".part-") && !it.name.endsWith(".temp") }
+                .maxByOrNull { it.length() } ?: throw java.io.IOException("Downloaded file not found")
+            val ext = outFile.extension.ifBlank { "mp4" }
+            val base = item.fileName.substringBeforeLast('.', item.fileName)
+            item.fileName = Http.sanitize("$base.$ext")
+            item.totalSize = outFile.length()
+            item.downloaded = outFile.length()
+            item.status = Status.MOVING; onUpdate(item)
+            val temp = FileStore.tempFile(ctx, item)
+            temp.delete()
+            if (!outFile.renameTo(temp)) { outFile.copyTo(temp, true); outFile.delete() }
+            item.finalPath = FileStore.publish(ctx, temp, item)
+            dir.deleteRecursively()
+            item.finishedAt = System.currentTimeMillis()
+            finish(Status.COMPLETED)
+        } catch (e: YoutubeDL.CanceledException) {
+            finish(Status.PAUSED)
+        } catch (e: Exception) {
+            if (cancelled) finish(Status.PAUSED)
+            else {
+                val msg = (e.message ?: e.javaClass.simpleName).lines().lastOrNull { it.contains("ERROR") } ?: e.message?.lines()?.lastOrNull { it.isNotBlank() }
+                item.error = (msg ?: "yt-dlp error").removePrefix("ERROR:").trim().take(300)
+                finish(Status.ERROR)
+            }
+        }
+    }
+
     private fun finish(s: Status) {
         item.status = s
         item.speed = 0
         item.activeConnections = 0
-        if (s != Status.COMPLETED) item.segments = synchronized(segs) { segs.joinToString(";") }
+        if (s != Status.COMPLETED && !item.isYtdlp) item.segments = synchronized(segs) { segs.joinToString(";") }
         onFinished(item)
     }
 

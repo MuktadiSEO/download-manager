@@ -105,6 +105,7 @@ object DM {
         Thread {
             tasks[id]?.join(4000)
             FileStore.tempFile(app, d).delete()
+            java.io.File(app.getExternalFilesDir(null) ?: app.filesDir, "yt/${d.id}").deleteRecursively()
             if (withFile) FileStore.delete(app, d.finalPath)
         }.start()
         db.delete(id)
@@ -119,6 +120,7 @@ object DM {
         val d = get(id) ?: return
         tasks[id]?.cancel()
         FileStore.tempFile(app, d).delete()
+        java.io.File(app.getExternalFilesDir(null) ?: app.filesDir, "yt/${d.id}").deleteRecursively()
         d.segments = null; d.downloaded = 0; d.finalPath = null; d.finishedAt = 0
         d.status = Status.PAUSED
         db.update(d)

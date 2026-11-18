@@ -59,11 +59,12 @@
         </activity>
 
         <activity android:name=".ui.ProgressActivity" android:theme="@style/Theme.MRM.Dialog" android:excludeFromRecents="true" />
+        <activity android:name=".ui.VideoQualityActivity" android:theme="@style/Theme.MRM.Dialog" android:excludeFromRecents="true" />
         <activity android:name=".ui.CompleteActivity" android:theme="@style/Theme.MRM.Dialog" android:excludeFromRecents="true" />
         <activity android:name=".ui.SettingsActivity" android:label="Options" />
         <activity android:name=".ui.SchedulerActivity" android:label="Scheduler" />
         <activity android:name=".ui.GrabberActivity" android:label="Site Grabber" android:windowSoftInputMode="adjustResize" />
-        <activity android:name=".ui.BrowserActivity" android:label="Browser"
+        <activity android:name=".ui.BrowserActivity" android:label="Browser" android:launchMode="singleTask"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden" android:windowSoftInputMode="adjustResize" />
 
         <service android:name=".service.DownloadService" android:exported="false" android:foregroundServiceType="dataSync" />

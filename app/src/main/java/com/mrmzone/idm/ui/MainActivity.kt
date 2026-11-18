@@ -97,7 +97,20 @@ class MainActivity : AppCompatActivity() {
             }
         })
         askPermissions()
+        handleTabIntent(intent)
     }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleTabIntent(intent)
+    }
+
+    private fun handleTabIntent(i: Intent?) {
+        val t = i?.getIntExtra("tab", -1) ?: -1
+        if (t in tabNames.indices) tabs.getTabAt(t)?.select()
+    }
+
+    private fun openBrowser() = startActivity(Intent(this, BrowserActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
 
     override fun onStart() { super.onStart(); DM.listeners.add(listener); refresh() }
     override fun onStop() { DM.listeners.remove(listener); super.onStop() }
@@ -138,7 +151,7 @@ class MainActivity : AppCompatActivity() {
         cmd(R.drawable.ic_queue_stop, "Stop Queue") { DM.stopQueue(); toast("Queue stopped") }
         cmd(R.drawable.ic_grabber, "Grabber") { startActivity(Intent(this, GrabberActivity::class.java)) }
         cmd(R.drawable.ic_batch, "Batch") { Dialogs.batch(this) }
-        cmd(R.drawable.ic_globe, "Browser") { startActivity(Intent(this, BrowserActivity::class.java)) }
+        cmd(R.drawable.ic_globe, "Browser") { openBrowser() }
         cmd(R.drawable.ic_share, "Tell a Friend") { tellFriend() }
     }
 
@@ -282,7 +295,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         when (item.itemId) {
-            R.id.m_browser -> startActivity(Intent(this, BrowserActivity::class.java))
+            R.id.m_browser -> openBrowser()
             R.id.m_settings -> startActivity(Intent(this, SettingsActivity::class.java))
             R.id.m_sort -> MaterialAlertDialogBuilder(this).setTitle("Sort by")
                 .setSingleChoiceItems(arrayOf("Date added", "Name", "Size", "Status"), sort) { dlg, w -> sort = w; refresh(); dlg.dismiss() }.show()

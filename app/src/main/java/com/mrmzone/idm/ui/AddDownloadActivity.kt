@@ -26,6 +26,7 @@ import com.mrmzone.idm.data.DownloadItem
 import com.mrmzone.idm.engine.DM
 import com.mrmzone.idm.engine.FileStore
 import com.mrmzone.idm.engine.Http
+import com.mrmzone.idm.engine.Ytdlp
 import com.mrmzone.idm.util.Fmt
 import com.mrmzone.idm.util.UrlUtil
 
@@ -124,9 +125,16 @@ class AddDownloadActivity : AppCompatActivity() {
     private fun setCategory(c: Category) { selCat = c; cat.setText(c.label, false); updateSaveTo() }
     private fun updateSaveTo() { saveTo.text = "Save to: Download/${FileStore.ROOT}/${selCat.folder}" }
 
+    private fun openVideoPicker(u: String, fallback: Boolean) {
+        startActivity(Intent(this, VideoQualityActivity::class.java).putExtra("url", u).putExtra("fallback", fallback))
+        finish()
+    }
+
     private fun probe() {
         val u = url.text.toString().trim()
         if (!u.startsWith("http", true)) return
+        // YouTube, Facebook, Instagram, TikTok… → quality list
+        if (Ytdlp.isVideoSite(u)) { openVideoPicker(u, fallback = true); return }
         val seq = ++probeSeq
         probing.visibility = View.VISIBLE
         info.text = "Getting file info…"
@@ -136,6 +144,12 @@ class AddDownloadActivity : AppCompatActivity() {
                 if (seq != probeSeq || isFinishing) return@runOnUiThread
                 probing.visibility = View.GONE
                 r.onSuccess { p ->
+                    if (p.contentType?.contains("text/html", true) == true) {
+                        // a web page, not a file: try video extraction, else open the browser to list downloadable files
+                        info.text = "This is a web page — looking for videos / files on it…"
+                        openVideoPicker(p.finalUrl, fallback = true)
+                        return@runOnUiThread
+                    }
                     size = p.size; resumable = p.resumable
                     if (!nameEdited) { name.setText(p.fileName); setCategory(Category.fromFileName(p.fileName)) }
                     info.text = "Size: ${Fmt.size(p.size)}  •  Resume: ${if (p.resumable) "Yes ✔" else "No"}" + (p.contentType?.let { "  •  $it" } ?: "")

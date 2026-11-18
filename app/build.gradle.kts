@@ -9,10 +9,10 @@ android {
 
     defaultConfig {
         applicationId = "com.mrmzone.idm"
-        minSdk = 23
+        minSdk = 24
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.1.0"
     }
 
     buildTypes {
@@ -20,6 +20,17 @@ android {
             isMinifyEnabled = false
             signingConfig = signingConfigs.getByName("debug")
         }
+    }
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "armeabi-v7a", "x86_64")
+            isUniversalApk = false
+        }
+    }
+    packaging {
+        jniLibs.useLegacyPackaging = true // yt-dlp's python/ffmpeg need extracted native libs
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -34,4 +45,7 @@ dependencies {
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.recyclerview:recyclerview:1.3.2")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
+    // yt-dlp + ffmpeg for YouTube & 1000+ video sites (all qualities, video+audio merge)
+    implementation("io.github.junkfood02.youtubedl-android:library:0.18.1")
+    implementation("io.github.junkfood02.youtubedl-android:ffmpeg:0.18.1")
 }

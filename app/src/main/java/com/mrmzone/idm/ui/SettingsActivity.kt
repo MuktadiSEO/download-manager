@@ -57,6 +57,21 @@ class SettingsActivity : AppCompatActivity() {
         }
         f.add(save)
 
+        f.header("VIDEO ENGINE (YouTube & 1000+ sites)")
+        val ver = f.note("yt-dlp version: checking…")
+        Thread { val v = com.mrmzone.idm.engine.Ytdlp.version(this); runOnUiThread { ver.text = "yt-dlp version: $v" } }.start()
+        f.add(MaterialButton(this).apply {
+            text = "Update video engine now"
+            setOnClickListener {
+                isEnabled = false; ver.text = "Updating yt-dlp…"
+                Thread {
+                    val r = runCatching { com.mrmzone.idm.engine.Ytdlp.update(this@SettingsActivity) }.getOrElse { "Update failed: ${it.message}" }
+                    runOnUiThread { ver.text = r; isEnabled = true }
+                }.start()
+            }
+        })
+        f.note("The engine updates itself automatically once a day so YouTube downloads keep working.")
+
         f.header("SAVE LOCATION")
         f.note("Files are sorted automatically into:\nDownload/${FileStore.ROOT}/Video, Music, Documents, Compressed, Programs, Images, General")
         f.show()

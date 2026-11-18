@@ -21,6 +21,9 @@ class Prefs(ctx: Context) {
     var homePage: String get() = sp.getString("home", "https://www.google.com")!!; set(v) = sp.edit().putString("home", v).apply()
     var darkTheme: Int get() = sp.getInt("theme", 2); set(v) = sp.edit().putInt("theme", v).apply() // 0 light 1 dark 2 system
 
+    var ytUpdateCheck: Long get() = sp.getLong("yt_upd", 0); set(v) = sp.edit().putLong("yt_upd", v).apply()
+    var ytBundleVc: Int get() = sp.getInt("yt_bundle_vc", 0); set(v) = sp.edit().putInt("yt_bundle_vc", v).apply()
+
     // Scheduler
     var schedEnabled: Boolean get() = sp.getBoolean("sch_on", false); set(v) = sp.edit().putBoolean("sch_on", v).apply()
     var schedStartMin: Int get() = sp.getInt("sch_start", 2 * 60); set(v) = sp.edit().putInt("sch_start", v).apply()

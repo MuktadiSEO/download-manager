@@ -14,6 +14,7 @@ class App : Application() {
         applyTheme(Prefs(this).darkTheme)
         Notifier.createChannels(this)
         DM.init(this)
+        com.mrmzone.idm.engine.Ytdlp.warmUp(this)
         DM.completeListeners.add { d ->
             val p = DM.prefs
             if (p.vibrateOnComplete) runCatching {

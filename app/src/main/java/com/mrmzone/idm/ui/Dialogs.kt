@@ -23,7 +23,7 @@ object Dialogs {
         EditText(a).apply { this.hint = hint; setText(value); inputType = type }
 
     /** Adds many URLs at once (used by batch, grabber and multi-link share). */
-    fun addMany(a: Activity, urls: List<String>, start: Boolean, referer: String? = null) {
+    fun addMany(a: Activity, urls: List<String>, start: Boolean, referer: String? = null, cookies: ((String) -> String?)? = null, ua: String? = null) {
         val names = mutableSetOf<String>()
         urls.forEach { u ->
             var n = Http.fileNameFrom(null, u, null)
@@ -31,7 +31,7 @@ object Dialogs {
             val base = n.substringBeforeLast('.'); val ext = n.substringAfterLast('.', "")
             while (!names.add(n)) { n = if (ext.isEmpty()) "$base ($i)" else "$base ($i).$ext"; i++ }
             DM.add(DownloadItem(url = u, fileName = n, category = Category.fromFileName(n), connections = DM.prefs.maxConnections,
-                userAgent = DM.prefs.userAgent, referer = referer, inQueue = true), start)
+                userAgent = ua ?: DM.prefs.userAgent, referer = referer, cookies = cookies?.invoke(u), inQueue = true), start)
         }
         Toast.makeText(a, "${urls.size} download(s) " + if (start) "started" else "added to queue", Toast.LENGTH_SHORT).show()
     }

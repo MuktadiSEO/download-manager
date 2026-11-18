@@ -43,7 +43,15 @@ data class DownloadItem(
     var inQueue: Boolean = false,
     var description: String? = null,
     var speedLimitKb: Int = 0,
+    /** null = direct HTTP download, "ytdlp" = video page handled by yt-dlp */
+    var kind: String? = null,
+    /** yt-dlp format selector, e.g. "137+140" */
+    var formatSpec: String? = null,
+    /** yt-dlp extra: merge container ("mp4"/"webm"/"mkv") or "mp3" for audio extraction */
+    var extra: String? = null,
 ) {
+    val isYtdlp get() = kind == "ytdlp"
+
     // runtime only
     @Transient var speed: Long = 0
     @Transient var liveSegments: List<Segment> = emptyList()
