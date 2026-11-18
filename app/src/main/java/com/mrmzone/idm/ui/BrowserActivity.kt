@@ -378,7 +378,7 @@ return JSON.stringify(o.slice(0,4000));})()"""
             val n = Http.fileNameFrom(null, u, null)
             "${n.take(60)}\n${runCatching { java.net.URL(u).host }.getOrDefault("")}"
         }.toTypedArray()
-        val checked = BooleanArray(found.size)
+        val checked = BooleanArray(found.size) { found.size <= 10 }
         val b = MaterialAlertDialogBuilder(this).setTitle(if (found.isEmpty()) "Nothing to download found" else "Found on this page (${found.size})")
         if (found.isNotEmpty()) b.setMultiChoiceItems(names, checked) { _, i, c -> checked[i] = c }
         b.setPositiveButton("Download selected") { _, _ ->
