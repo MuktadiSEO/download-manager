@@ -105,7 +105,7 @@ class VideoQualityActivity : AppCompatActivity() {
     private fun show(info: Ytdlp.Info) {
         status.text = "${info.qualities.size} options found — tap one to download"
         val thumb = ImageView(this).apply { scaleType = ImageView.ScaleType.CENTER_CROP; setBackgroundColor(0xFF000000.toInt()) }
-        body.addView(thumb, LinearLayout.LayoutParams(-1, (180 * dp).toInt()).apply { topMargin = (10 * dp).toInt() })
+        if (!info.thumbnail.isNullOrBlank()) body.addView(thumb, LinearLayout.LayoutParams(-1, (180 * dp).toInt()).apply { topMargin = (10 * dp).toInt() })
         info.thumbnail?.let { t ->
             Thread {
                 val bmp = runCatching { URL(t).openStream().use { BitmapFactory.decodeStream(it) } }.getOrNull()
