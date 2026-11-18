@@ -84,6 +84,10 @@ object Http {
             }
             if (name == null) Regex("filename=\"?([^\";]+)\"?").find(disposition)?.let { name = it.groupValues[1] }
         }
+        if (name.isNullOrBlank()) {
+            val seg = runCatching { URLDecoder.decode(URL(url).path.substringAfterLast('/'), "UTF-8") }.getOrNull()
+            if (!seg.isNullOrBlank() && seg.contains('.') && seg.substringAfterLast('.').length in 1..5) name = seg
+        }
         if (name.isNullOrBlank()) name = URLUtil.guessFileName(url, disposition, mime)
         return sanitize(name ?: "download.bin")
     }

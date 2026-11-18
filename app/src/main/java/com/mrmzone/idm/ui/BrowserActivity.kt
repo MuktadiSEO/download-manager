@@ -119,7 +119,7 @@ class BrowserActivity : AppCompatActivity() {
             }
         }
         web.setDownloadListener { url, ua, disposition, mime, _ ->
-            val name = Http.sanitize(URLUtil.guessFileName(url, disposition, mime))
+            val name = Http.fileNameFrom(disposition, url, mime)
             startAdd(url, name)
         }
         web.setOnLongClickListener {

@@ -24,6 +24,7 @@ class DownloadTask(
     private val maxRetries: Int,
     private val onUpdate: (DownloadItem) -> Unit,
     private val onFinished: (DownloadItem) -> Unit,
+    private val onSave: (DownloadItem) -> Unit = {},
 ) : Thread("dl-${item.id}") {
 
     @Volatile var cancelled = false; private set
@@ -45,6 +46,8 @@ class DownloadTask(
             prepare()
             if (cancelled) return finish(Status.PAUSED)
             item.status = Status.DOWNLOADING
+            item.segments = synchronized(segs) { segs.joinToString(";") }
+            onSave(item)
             onUpdate(item)
             loop()
             closeFile()
@@ -73,7 +76,7 @@ class DownloadTask(
         item.status = s
         item.speed = 0
         item.activeConnections = 0
-        if (s != Status.COMPLETED) item.segments = segs.joinToString(";")
+        if (s != Status.COMPLETED) item.segments = synchronized(segs) { segs.joinToString(";") }
         onFinished(item)
     }
 
@@ -161,7 +164,11 @@ class DownloadTask(
             item.speed = ema.toLong()
             item.activeConnections = workers.size
             synchronized(segs) { item.liveSegments = segs.map { Segment(it.start, it.end, it.done) } }
-            if (now - lastSave > 3000) { item.segments = segs.joinToString(";"); lastSave = now }
+            if (now - lastSave > 3000) {
+                item.segments = synchronized(segs) { segs.joinToString(";") }
+                runCatching { onSave(item) }
+                lastSave = now
+            }
             onUpdate(item)
         }
         workers.values.forEach { it.abort() }

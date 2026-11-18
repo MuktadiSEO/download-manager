@@ -31,12 +31,19 @@ class DownloadService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    override fun onCreate() {
-        super.onCreate()
-        DM.init(this)
+    private var lastStartId = 0
+
+    private fun goForeground() {
         val n = Notifier.progress(this, emptyList(), 0)
         if (Build.VERSION.SDK_INT >= 29) startForeground(Notifier.FG_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
         else startForeground(Notifier.FG_ID, n)
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        goForeground()
+        running = true
+        DM.init(this)
         runCatching {
             wakeLock = (getSystemService(POWER_SERVICE) as PowerManager).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "mrmidm:dl").apply { acquire(6 * 60 * 60 * 1000L) }
             @Suppress("DEPRECATION")
@@ -47,6 +54,8 @@ class DownloadService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        goForeground() // every startForegroundService() must be answered with startForeground()
+        lastStartId = startId
         when (intent?.action) {
             ACTION_PAUSE_ALL -> DM.pauseAll()
             ACTION_START_QUEUE -> DM.startQueue()
@@ -56,11 +65,15 @@ class DownloadService : Service() {
 
     private fun stopSelfNow() {
         h.removeCallbacks(tick)
-        if (Build.VERSION.SDK_INT >= 24) stopForeground(STOP_FOREGROUND_REMOVE) else @Suppress("DEPRECATION") stopForeground(true)
-        stopSelf()
+        // only stop if no newer start request arrived meanwhile
+        if (stopSelfResult(lastStartId)) {
+            running = false
+            if (Build.VERSION.SDK_INT >= 24) stopForeground(STOP_FOREGROUND_REMOVE) else @Suppress("DEPRECATION") stopForeground(true)
+        } else h.postDelayed(tick, 1000)
     }
 
     override fun onDestroy() {
+        running = false
         h.removeCallbacks(tick)
         runCatching { wakeLock?.release() }
         runCatching { wifiLock?.release() }
@@ -70,8 +83,11 @@ class DownloadService : Service() {
     companion object {
         const val ACTION_PAUSE_ALL = "pause_all"
         const val ACTION_START_QUEUE = "start_queue"
+        @Volatile var running = false
         fun ensureRunning(ctx: Context) {
-            runCatching { ContextCompat.startForegroundService(ctx, Intent(ctx, DownloadService::class.java)) }
+            if (running) return
+            running = true
+            runCatching { ContextCompat.startForegroundService(ctx, Intent(ctx, DownloadService::class.java)) }.onFailure { running = false }
         }
     }
 }

@@ -147,7 +147,7 @@ object DM {
         for (d in waiting) {
             if (tasks.size >= max) break
             if (tasks.containsKey(d.id)) continue
-            val t = DownloadTask(app, d, prefs.retries, { notifyChanged(false) }, ::onTaskFinished)
+            val t = DownloadTask(app, d, prefs.retries, { notifyChanged(false) }, ::onTaskFinished) { db.update(it) }
             tasks[d.id] = t
             t.start()
         }
