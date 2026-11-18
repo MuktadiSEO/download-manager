@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>MRM Zone IDM</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header class="header">
+    <img src="icons/icon128.png" alt="" class="logo" width="36" height="36">
+    <div class="titles">
+      <div class="title">MRM Zone IDM</div>
+      <div class="subtitle">Browser integration <span id="extVersion"></span></div>
+    </div>
+  </header>
+
+  <div id="status" class="status checking" role="status">
+    <span class="dot"></span><span id="statusText">Checking connection&hellip;</span>
+  </div>
+
+  <section class="card">
+    <label class="row toggle">
+      <span class="label">Capture downloads from Chrome</span>
+      <input type="checkbox" id="captureEnabled">
+      <span class="switch" aria-hidden="true"></span>
+    </label>
+    <label class="row toggle">
+      <span class="label">Show &lsquo;Download this video&rsquo; button</span>
+      <input type="checkbox" id="showVideoButton">
+      <span class="switch" aria-hidden="true"></span>
+    </label>
+    <label class="row">
+      <span class="label">Minimum size to capture (KB)</span>
+      <input type="number" id="minSizeKB" min="0" step="1" class="num">
+    </label>
+  </section>
+
+  <section class="card">
+    <div class="section-head">
+      <span>Videos on this page</span>
+      <span id="mediaCount" class="count">0</span>
+    </div>
+    <ul id="mediaList" class="media-list"></ul>
+    <div id="mediaEmpty" class="empty">No videos detected on this tab yet. Play the video, then reopen this menu.</div>
+    <button id="pageVideo" class="btn secondary" type="button">Download video from this page</button>
+  </section>
+
+  <button id="allLinks" class="btn primary" type="button">Download all links on this page</button>
+  <div id="message" class="message" hidden></div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -7,3 +7,6 @@ local.properties
 .DS_Store
 captures/
 .kotlin/
+desktop/MRMZoneIDM/bin/
+desktop/MRMZoneIDM/obj/
+desktop/publish/
