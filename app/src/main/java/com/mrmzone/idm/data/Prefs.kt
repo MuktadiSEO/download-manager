@@ -24,6 +24,11 @@ class Prefs(ctx: Context) {
     var ytUpdateCheck: Long get() = sp.getLong("yt_upd", 0); set(v) = sp.edit().putLong("yt_upd", v).apply()
     var ytBundleVc: Int get() = sp.getInt("yt_bundle_vc", 0); set(v) = sp.edit().putInt("yt_bundle_vc", v).apply()
 
+    var adblock: Boolean get() = sp.getBoolean("adblock", true); set(v) = sp.edit().putBoolean("adblock", v).apply()
+    var adblockAllow: Set<String> get() = sp.getStringSet("adblock_allow", emptySet())!!.toSet(); set(v) = sp.edit().putStringSet("adblock_allow", v).apply()
+    var savedTabs: String? get() = sp.getString("tabs", null); set(v) = sp.edit().putString("tabs", v).apply()
+    var savedTabCur: Int get() = sp.getInt("tab_cur", 0); set(v) = sp.edit().putInt("tab_cur", v).apply()
+
     // Scheduler
     var schedEnabled: Boolean get() = sp.getBoolean("sch_on", false); set(v) = sp.edit().putBoolean("sch_on", v).apply()
     var schedStartMin: Int get() = sp.getInt("sch_start", 2 * 60); set(v) = sp.edit().putInt("sch_start", v).apply()

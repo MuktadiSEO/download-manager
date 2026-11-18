@@ -40,6 +40,8 @@ import com.google.android.material.floatingactionbutton.ExtendedFloatingActionBu
 import com.mrmzone.idm.R
 import com.mrmzone.idm.data.Category
 import com.mrmzone.idm.data.Status
+import com.google.android.material.snackbar.Snackbar
+import com.mrmzone.idm.engine.AdBlock
 import com.mrmzone.idm.engine.DM
 import com.mrmzone.idm.engine.Http
 import com.mrmzone.idm.engine.Ytdlp
@@ -57,6 +59,12 @@ class BrowserActivity : AppCompatActivity() {
         val media = linkedSetOf<String>()
         var files: List<String> = emptyList()
         var desktop = false
+        var pendingUrl: String? = null          // restored tab, loaded when first shown
+        @Volatile var pageUrl: String? = null
+        @Volatile var adOn = true
+        @Volatile var blocked = 0
+        @Volatile var popupAt = 0L
+        val url: String? get() = web.url ?: pendingUrl
     }
 
     private val tabs = mutableListOf<Tab>()
@@ -83,7 +91,7 @@ class BrowserActivity : AppCompatActivity() {
             orientation = LinearLayout.HORIZONTAL; setBackgroundColor(barColor); gravity = Gravity.CENTER_VERTICAL
             setPadding((4 * dp).toInt(), (4 * dp).toInt(), (4 * dp).toInt(), (4 * dp).toInt())
         }
-        top.addView(iconBtn(R.drawable.ic_close) { finish() })
+        top.addView(iconBtn(R.drawable.ic_close) { closeCurrentTab() })
         address = EditText(this).apply {
             setSingleLine(); textSize = 14f; setTextColor(0xFFFFFFFF.toInt()); setHintTextColor(0xFF9AA3AF.toInt())
             hint = "Search or type web address"; imeOptions = EditorInfo.IME_ACTION_GO
@@ -93,6 +101,14 @@ class BrowserActivity : AppCompatActivity() {
             }
         }
         top.addView(address, LinearLayout.LayoutParams(0, -2, 1f))
+        shield = TextView(this).apply {
+            setTextColor(0xFFFFFFFF.toInt()); textSize = 12f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER
+            setPadding((8 * dp).toInt(), (4 * dp).toInt(), (8 * dp).toInt(), (4 * dp).toInt())
+            background = GradientDrawable().apply { cornerRadius = 12 * dp; setColor(0xFF2E7D32.toInt()) }
+            setOnClickListener { showShield() }
+            contentDescription = "Ad blocker"
+        }
+        top.addView(shield, LinearLayout.LayoutParams(-2, -2).apply { marginStart = (4 * dp).toInt() })
         top.addView(iconBtn(R.drawable.ic_refresh) { tab.web.reload() })
         root.addView(top)
         bar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply { max = 100 }
@@ -144,14 +160,79 @@ class BrowserActivity : AppCompatActivity() {
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                when {
-                    tab.web.canGoBack() -> tab.web.goBack()
-                    tabs.size > 1 -> closeTab(cur)
-                    else -> finish()
-                }
+                // leaving the browser keeps all tabs; they are restored next time
+                if (tab.web.canGoBack()) tab.web.goBack() else finish()
             }
         })
-        newTab(intent.getStringExtra("url") ?: DM.prefs.homePage)
+        restoreTabs()
+        intent.getStringExtra("url")?.let { newTab(it) }
+        if (tabs.isEmpty()) newTab(DM.prefs.homePage)
+    }
+
+    // ---------------- saved tabs ----------------
+    private fun saveTabs() {
+        val arr = JSONArray()
+        tabs.forEach { arr.put(it.url ?: DM.prefs.homePage) }
+        DM.prefs.savedTabs = arr.toString()
+        DM.prefs.savedTabCur = cur.coerceAtLeast(0)
+    }
+
+    private fun restoreTabs() {
+        val arr = runCatching { JSONArray(DM.prefs.savedTabs ?: return) }.getOrNull() ?: return
+        for (i in 0 until arr.length()) {
+            val t = createWebView()
+            t.pendingUrl = arr.optString(i).ifBlank { DM.prefs.homePage }
+            tabs.add(t)
+        }
+        if (tabs.isNotEmpty()) switchTo(DM.prefs.savedTabCur.coerceIn(0, tabs.size - 1))
+    }
+
+    /** ✕ button: close only the current tab (closing the last one leaves the browser). */
+    private fun closeCurrentTab() {
+        if (tabs.size <= 1) {
+            tabs.forEach { content.removeView(it.web); it.web.destroy() }
+            tabs.clear(); cur = -1
+            DM.prefs.savedTabs = null
+            finish()
+        } else closeTab(cur)
+    }
+
+    override fun onPause() { super.onPause(); if (tabs.isNotEmpty()) saveTabs() }
+
+    // ---------------- ad blocker UI ----------------
+    private lateinit var shield: TextView
+
+    private fun updateShield() {
+        if (cur !in tabs.indices) return
+        val on = tab.adOn && DM.prefs.adblock
+        shield.text = if (!on) "🛡 off" else "🛡 ${tab.blocked}"
+        (shield.background as GradientDrawable).setColor(if (on) 0xFF2E7D32.toInt() else 0xFF757575.toInt())
+    }
+
+    private fun showShield() {
+        val url = tab.url
+        val site = AdBlock.site(AdBlock.host(url)) ?: return
+        val allowed = site in DM.prefs.adblockAllow
+        val msg = when {
+            !DM.prefs.adblock -> "Ad blocker is turned off in Options."
+            allowed -> "Ad blocker is OFF for $site."
+            else -> "${tab.blocked} ads / pop-ups blocked on this page."
+        }
+        val b = MaterialAlertDialogBuilder(this).setTitle("Ad blocker").setMessage(msg)
+        if (DM.prefs.adblock) b.setPositiveButton(if (allowed) "Turn ON for $site" else "Turn OFF for $site") { _, _ ->
+            DM.prefs.adblockAllow = if (allowed) DM.prefs.adblockAllow - site else DM.prefs.adblockAllow + site
+            tab.adOn = AdBlock.enabledFor(DM.prefs, url); updateShield(); tab.web.reload()
+        } else b.setPositiveButton("Turn ON") { _, _ -> DM.prefs.adblock = true; tab.adOn = AdBlock.enabledFor(DM.prefs, url); updateShield(); tab.web.reload() }
+        b.setNegativeButton("Close", null).show()
+    }
+
+    private fun blockedSnack(text: String, url: String) {
+        Snackbar.make(content, text, Snackbar.LENGTH_LONG).setAction("Open anyway") { newTab(url) }.show()
+    }
+
+    private fun countBlocked(t: Tab) {
+        t.blocked++
+        runOnUiThread { if (tabs.getOrNull(cur) == t) updateShield() }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -199,10 +280,36 @@ class BrowserActivity : AppCompatActivity() {
                 bar.progress = p; bar.visibility = if (p >= 100) View.INVISIBLE else View.VISIBLE
             }
             override fun onCreateWindow(view: WebView, isDialog: Boolean, isUserGesture: Boolean, resultMsg: Message): Boolean {
-                if (!isUserGesture) return false
-                val nt = createWebView()
-                tabs.add(nt); switchTo(tabs.size - 1)
-                (resultMsg.obj as WebView.WebViewTransport).webView = nt.web
+                if (!isUserGesture) { if (t.adOn) countBlocked(t); return false }
+                // Load the new window in a hidden throw-away WebView first, look where it goes,
+                // then either open it as a real tab or silently destroy it (pop-up / pop-under ad).
+                val clicked = view.hitTestResult.extra?.takeIf { it.startsWith("http") }
+                t.popupAt = System.currentTimeMillis()
+                val probe = WebView(this@BrowserActivity)
+                var handled = false
+                fun decide(u: String) {
+                    if (handled) return
+                    handled = true
+                    probe.stopLoading()
+                    probe.post { runCatching { probe.destroy() } }
+                    val isAd = t.adOn && AdBlock.loaded && (
+                        AdBlock.isPopupAd(u) ||
+                        (clicked == null && !AdBlock.sameSite(u, t.pageUrl)) ||
+                        (clicked != null && u != clicked && !AdBlock.sameSite(u, clicked) && !AdBlock.sameSite(u, t.pageUrl)))
+                    if (isAd) { countBlocked(t); blockedSnack("Pop-up ad blocked", u) } else newTab(u)
+                }
+                probe.webViewClient = object : WebViewClient() {
+                    override fun shouldOverrideUrlLoading(v: WebView, r: WebResourceRequest): Boolean {
+                        val u = r.url.toString()
+                        if (u.startsWith("http")) decide(u)
+                        return true
+                    }
+                    override fun onPageStarted(v: WebView, url: String, favicon: Bitmap?) {
+                        if (url.startsWith("http")) decide(url)
+                    }
+                }
+                probe.postDelayed({ if (!handled) { handled = true; runCatching { probe.destroy() } } }, 15_000)
+                (resultMsg.obj as WebView.WebViewTransport).webView = probe
                 resultMsg.sendToTarget()
                 return true
             }
@@ -211,22 +318,42 @@ class BrowserActivity : AppCompatActivity() {
         web.webViewClient = object : WebViewClient() {
             override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
                 t.media.clear(); t.files = emptyList()
-                if (view == tab.web) { address.setText(url); updateFab() }
+                t.pageUrl = url; t.blocked = 0
+                t.adOn = AdBlock.enabledFor(DM.prefs, url)
+                if (view == tab.web) { address.setText(url); updateFab(); updateShield() }
             }
             override fun onPageFinished(view: WebView, url: String) { scan(t) }
             override fun doUpdateVisitedHistory(view: WebView, url: String, isReload: Boolean) {
                 // single-page sites (YouTube) change URL without reloading
+                t.pageUrl = url
                 if (view == tab.web && !address.hasFocus()) address.setText(url)
                 if (view == tab.web) updateFab()
                 view.postDelayed({ scan(t) }, 1500)
             }
             override fun shouldOverrideUrlLoading(view: WebView, req: WebResourceRequest): Boolean {
                 val u = req.url.toString()
-                if (!u.startsWith("http")) { runCatching { startActivity(Intent(Intent.ACTION_VIEW, req.url)) }; return true }
+                if (!u.startsWith("http")) {
+                    // intent:// / market:// links are a common ad trick; only follow them on a real tap
+                    if (req.hasGesture() && !(t.adOn && u.startsWith("intent:"))) runCatching { startActivity(Intent(Intent.ACTION_VIEW, req.url)) }
+                    else if (t.adOn) countBlocked(t)
+                    return true
+                }
+                if (t.adOn && AdBlock.loaded && req.isForMainFrame && !AdBlock.sameSite(u, t.pageUrl)) {
+                    // redirect to a known ad / pop-under network
+                    if (AdBlock.isPopupAd(u)) { countBlocked(t); runOnUiThread { blockedSnack("Ad page blocked", u) }; return true }
+                    // pop-under trick: right after opening a pop-up, the page sends this tab to another site by script
+                    if (!req.hasGesture() && System.currentTimeMillis() - t.popupAt < 4000) {
+                        countBlocked(t); runOnUiThread { blockedSnack("Redirect to ad blocked", u) }; return true
+                    }
+                }
                 return false
             }
             override fun shouldInterceptRequest(view: WebView, req: WebResourceRequest): WebResourceResponse? {
                 val u = req.url.toString()
+                if (t.adOn && AdBlock.loaded && !req.isForMainFrame && AdBlock.isAd(u) && !AdBlock.sameSite(u, t.pageUrl)) {
+                    countBlocked(t)
+                    return WebResourceResponse("text/plain", "utf-8", java.io.ByteArrayInputStream(ByteArray(0)))
+                }
                 if (Ytdlp.isYouTube(u) || u.contains("googlevideo.com")) return null // handled by quality picker
                 val ext = u.substringBefore('?').substringAfterLast('/').substringAfterLast('.', "").lowercase()
                 if (ext in mediaExts) runOnUiThread { if (t.media.add(u) && tabs.getOrNull(cur) == t) updateFab() }
@@ -261,6 +388,7 @@ class BrowserActivity : AppCompatActivity() {
         tabs.add(t)
         switchTo(tabs.size - 1)
         load(t, url)
+        saveTabs()
     }
 
     private fun switchTo(i: Int) {
@@ -268,7 +396,9 @@ class BrowserActivity : AppCompatActivity() {
         cur = i
         content.addView(tab.web, 0, FrameLayout.LayoutParams(-1, -1))
         tab.web.onResume()
-        address.setText(tab.web.url.orEmpty())
+        tab.pendingUrl?.let { p -> tab.pendingUrl = null; load(tab, p) }
+        address.setText(tab.url.orEmpty())
+        updateShield()
         tabCount.text = tabs.size.toString()
         updateFab()
     }
@@ -282,6 +412,7 @@ class BrowserActivity : AppCompatActivity() {
         if (tabs.isEmpty()) { cur = -1; newTab(DM.prefs.homePage); return }
         if (wasCurrent) { cur = -1; switchTo(minOf(i, tabs.size - 1)) }
         else { if (i < cur) cur--; tabCount.text = tabs.size.toString(); updateFab() }
+        saveTabs()
     }
 
     private fun showTabs() {
@@ -298,8 +429,8 @@ class BrowserActivity : AppCompatActivity() {
                 setOnClickListener { switchTo(i); dlg?.dismiss() }
             }
             val txt = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-            txt.addView(TextView(this).apply { text = t.web.title?.ifBlank { null } ?: "New tab"; textSize = 15f; maxLines = 1; setTypeface(typeface, Typeface.BOLD) })
-            txt.addView(TextView(this).apply { text = t.web.url.orEmpty(); textSize = 12f; maxLines = 1; setTextColor(ContextCompat.getColor(context, R.color.text_secondary)) })
+            txt.addView(TextView(this).apply { text = t.web.title?.ifBlank { null } ?: t.url ?: "New tab"; textSize = 15f; maxLines = 1; setTypeface(typeface, Typeface.BOLD) })
+            txt.addView(TextView(this).apply { text = t.url.orEmpty(); textSize = 12f; maxLines = 1; setTextColor(ContextCompat.getColor(context, R.color.text_secondary)) })
             row.addView(txt, LinearLayout.LayoutParams(0, -2, 1f))
             row.addView(ImageButton(this).apply {
                 setImageResource(R.drawable.ic_close); background = null
@@ -436,6 +567,7 @@ return JSON.stringify(o.slice(0,4000));})()"""
         m.add(0, 4, 0, "Site grabber (deep scan)")
         m.add(0, 5, 0, "Downloads")
         m.add(0, 6, 0, if (tab.desktop) "Mobile site" else "Desktop site")
+        m.add(0, 9, 0, "Ad blocker…")
         m.add(0, 7, 0, "Copy link")
         m.add(0, 8, 0, "Share link")
         pm.setOnMenuItemClickListener {
@@ -454,6 +586,7 @@ return JSON.stringify(o.slice(0,4000));})()"""
                     tab.web.settings.useWideViewPort = true
                     tab.web.reload()
                 }
+                9 -> showShield()
                 7 -> copy(url)
                 8 -> startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, url), "Share"))
             }

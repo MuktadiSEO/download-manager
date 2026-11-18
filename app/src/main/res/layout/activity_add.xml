@@ -84,16 +84,16 @@
         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
             android:orientation="horizontal" android:gravity="end|center_vertical" android:layout_marginTop="10dp"
             android:baselineAligned="false" android:paddingBottom="6dp">
-            <com.google.android.material.button.MaterialButton android:id="@+id/btnCancel"
+            <com.google.android.material.button.MaterialButton android:id="@+id/btnCancel" android:paddingStart="14dp" android:paddingEnd="14dp" android:minWidth="0dp"
                 style="@style/Widget.Material3.Button.TextButton"
                 android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Cancel" />
-            <com.google.android.material.button.MaterialButton android:id="@+id/btnLater"
+            <com.google.android.material.button.MaterialButton android:id="@+id/btnLater" android:paddingStart="14dp" android:paddingEnd="14dp" android:minWidth="0dp"
                 style="@style/Widget.Material3.Button.OutlinedButton"
                 android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:layout_marginStart="6dp" android:text="Later" />
-            <com.google.android.material.button.MaterialButton android:id="@+id/btnStart"
+                android:layout_marginStart="4dp" android:text="Later" android:maxLines="1" />
+            <com.google.android.material.button.MaterialButton android:id="@+id/btnStart" android:paddingStart="14dp" android:paddingEnd="14dp" android:minWidth="0dp"
                 android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:layout_marginStart="6dp" android:text="Download" android:maxLines="1"
+                android:layout_marginStart="4dp" android:text="Download" android:maxLines="1"
                 app:backgroundTint="@color/brand_orange" android:textColor="#FFFFFF" />
         </LinearLayout>
     </LinearLayout>

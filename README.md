@@ -31,6 +31,9 @@ Android 7.0 or newer.
 - **Built-in browser** with **multiple tabs**, a **Downloads** button (shows active count),
   a list of **all downloadable files on any page**, video quality picker, desktop mode,
   long-press any link to download / open in new tab.
+- **Ad & pop-up blocker** (EasyList + IndianList, easylist.to, GPLv3 / CC BY-SA 3.0): blocks ad scripts,
+  pop-up / pop-under tabs and ad redirects; shield button shows the count and can disable it per site.
+- Browser tabs are saved and restored; ✕ closes only the current tab.
 - **Smart Add URL**: video pages show the quality list; other web pages open in the browser
   with their downloadable files listed.
 - **Site Grabber** — scan a web page (optionally the pages it links to) for files of chosen types.

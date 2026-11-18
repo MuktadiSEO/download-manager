@@ -43,6 +43,8 @@ class SettingsActivity : AppCompatActivity() {
         f.add(rg)
 
         f.header("BROWSER")
+        f.switch("Block ads & pop-up ads", p.adblock) { p.adblock = it }
+        f.note("Uses EasyList + IndianList. You can turn it off for a single site from the browser's shield button.")
         val home = EditText(this).apply { hint = "Home page"; setText(p.homePage) }
         f.add(home)
         val ua = EditText(this).apply { hint = "User-Agent"; setText(p.userAgent); textSize = 12f }
