@@ -45,7 +45,8 @@
             android:text="Show download complete dialog" />
 
         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:orientation="horizontal" android:gravity="end" android:layout_marginTop="8dp">
+            android:orientation="horizontal" android:gravity="end|center_vertical" android:layout_marginTop="8dp"
+            android:baselineAligned="false" android:paddingBottom="6dp">
             <com.google.android.material.button.MaterialButton android:id="@+id/btnDelete"
                 style="@style/Widget.Material3.Button.TextButton"
                 android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Cancel" />
