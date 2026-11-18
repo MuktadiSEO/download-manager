@@ -1,0 +1,14 @@
+<resources>
+    <style name="Theme.MRM" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">#90CAF9</item>
+        <item name="colorOnPrimary">#0D2A4A</item>
+        <item name="colorPrimaryContainer">#1E3A5F</item>
+        <item name="colorSecondary">@color/brand_orange</item>
+        <item name="colorOnSecondary">#FFFFFF</item>
+        <item name="colorSecondaryContainer">#5A2A20</item>
+        <item name="colorTertiary">@color/brand_gold</item>
+        <item name="android:colorBackground">@color/bg</item>
+        <item name="android:statusBarColor">@color/bar</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

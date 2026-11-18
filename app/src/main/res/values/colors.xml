@@ -1,0 +1,20 @@
+<resources>
+    <color name="brand_blue">#1565C0</color>
+    <color name="brand_blue_dark">#0D47A1</color>
+    <color name="brand_orange">#FF6347</color>
+    <color name="brand_gold">#FFC83C</color>
+    <color name="bg">#F1F3F6</color>
+    <color name="surface">#FFFFFF</color>
+    <color name="bar">#2B2F36</color>
+    <color name="text_secondary">#6B7280</color>
+    <color name="seg_bg">#DCE3EC</color>
+    <color name="ok">#2E7D32</color>
+    <color name="err">#D32F2F</color>
+    <color name="cat_video">#E53935</color>
+    <color name="cat_music">#8E24AA</color>
+    <color name="cat_doc">#1E88E5</color>
+    <color name="cat_zip">#F9A825</color>
+    <color name="cat_app">#43A047</color>
+    <color name="cat_image">#00ACC1</color>
+    <color name="cat_other">#757575</color>
+</resources>

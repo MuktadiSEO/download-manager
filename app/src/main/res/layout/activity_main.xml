@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:background="@color/bg">
+
+    <com.google.android.material.appbar.AppBarLayout
+        android:id="@+id/appbar"
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:background="@color/bar">
+
+        <com.google.android.material.appbar.MaterialToolbar
+            android:id="@+id/toolbar"
+            android:layout_width="match_parent" android:layout_height="?attr/actionBarSize"
+            android:theme="@style/ThemeOverlay.Material3.Dark.ActionBar"
+            app:titleTextColor="#FFFFFF"
+            app:contentInsetStart="12dp">
+            <LinearLayout
+                android:layout_width="wrap_content" android:layout_height="match_parent"
+                android:gravity="center_vertical" android:orientation="horizontal">
+                <ImageView
+                    android:layout_width="40dp" android:layout_height="40dp"
+                    android:src="@drawable/logo_mrm" android:contentDescription="MRM Zone logo" />
+                <LinearLayout
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:layout_marginStart="10dp" android:orientation="vertical">
+                    <TextView
+                        android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="MRM Zone IDM" android:textColor="#FFFFFF"
+                        android:textSize="19sp" android:textStyle="bold" />
+                    <TextView
+                        android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="Internet Download Manager" android:textColor="#B8C4D6"
+                        android:textSize="11sp" />
+                </LinearLayout>
+            </LinearLayout>
+        </com.google.android.material.appbar.MaterialToolbar>
+
+        <com.google.android.material.tabs.TabLayout
+            android:id="@+id/tabs"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:background="@color/bar"
+            app:tabMode="scrollable" app:tabGravity="start"
+            app:tabTextColor="#B8C4D6" app:tabSelectedTextColor="#FFFFFF"
+            app:tabIndicatorColor="@color/brand_orange" app:tabIndicatorFullWidth="true"
+            app:tabIndicatorHeight="3dp" />
+    </com.google.android.material.appbar.AppBarLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent" android:layout_height="match_parent"
+        android:orientation="vertical"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior">
+
+        <!-- IDM style command toolbar -->
+        <HorizontalScrollView
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:background="@color/surface" android:scrollbars="none" android:elevation="2dp">
+            <LinearLayout
+                android:id="@+id/commandBar"
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:paddingHorizontal="4dp" android:paddingVertical="4dp" />
+        </HorizontalScrollView>
+
+        <HorizontalScrollView
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:scrollbars="none">
+            <com.google.android.material.chip.ChipGroup
+                android:id="@+id/chips"
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:paddingHorizontal="10dp"
+                app:singleLine="true" app:singleSelection="true" app:selectionRequired="true"
+                app:chipSpacingHorizontal="6dp" />
+        </HorizontalScrollView>
+
+        <FrameLayout
+            android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1">
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/list"
+                android:layout_width="match_parent" android:layout_height="match_parent"
+                android:clipToPadding="false" android:paddingBottom="88dp" />
+
+            <LinearLayout
+                android:id="@+id/empty"
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:layout_gravity="center" android:gravity="center_horizontal"
+                android:orientation="vertical">
+                <ImageView
+                    android:layout_width="72dp" android:layout_height="72dp"
+                    android:src="@drawable/ic_cloud_download" android:alpha="0.45" />
+                <TextView
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp" android:text="No Downloads"
+                    android:textSize="18sp" android:textStyle="bold" android:alpha="0.6" />
+                <TextView
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp" android:text="Tap + to add a URL, or share a link to MRM Zone IDM"
+                    android:textSize="13sp" android:textColor="@color/text_secondary" />
+            </LinearLayout>
+        </FrameLayout>
+
+        <TextView
+            android:id="@+id/statusBar"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:background="@color/bar" android:paddingHorizontal="14dp" android:paddingVertical="6dp"
+            android:textColor="#D7DEE8" android:textSize="12sp" android:text="Ready" />
+    </LinearLayout>
+
+    <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
+        android:id="@+id/fab"
+        android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="16dp" android:layout_marginBottom="44dp"
+        android:text="Add URL" android:textColor="#FFFFFF"
+        app:icon="@drawable/ic_add" app:iconTint="#FFFFFF"
+        app:backgroundTint="@color/brand_orange" />
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

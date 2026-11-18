@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    <item android:id="@+id/m_search" android:title="Search" android:icon="@drawable/ic_search"
+        app:showAsAction="collapseActionView|ifRoom" app:actionViewClass="androidx.appcompat.widget.SearchView" />
+    <item android:id="@+id/m_browser" android:title="Browser" android:icon="@drawable/ic_globe" app:showAsAction="always" />
+    <item android:id="@+id/m_settings" android:title="Options" android:icon="@drawable/ic_settings" app:showAsAction="always" />
+    <item android:id="@+id/m_sort" android:title="Sort by…" />
+    <item android:id="@+id/m_batch" android:title="Add batch download" />
+    <item android:id="@+id/m_grabber" android:title="Site grabber" />
+    <item android:id="@+id/m_scheduler" android:title="Scheduler" />
+    <item android:id="@+id/m_start_queue" android:title="Start queue" />
+    <item android:id="@+id/m_stop_queue" android:title="Stop queue" />
+    <item android:id="@+id/m_resume_all" android:title="Resume all" />
+    <item android:id="@+id/m_pause_all" android:title="Stop all" />
+    <item android:id="@+id/m_delete_completed" android:title="Delete completed" />
+    <item android:id="@+id/m_folder" android:title="Open download folder" />
+    <item android:id="@+id/m_share" android:title="Tell a friend" />
+    <item android:id="@+id/m_about" android:title="About" />
+</menu>

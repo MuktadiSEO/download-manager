@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">MRM Zone IDM</string>
+    <string name="app_full">MRM Zone Internet Download Manager</string>
+    <string name="download_with">Download with MRM Zone IDM</string>
+</resources>
