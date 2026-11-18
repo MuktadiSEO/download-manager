@@ -27,7 +27,9 @@ public class VideoForm : Form
         this.pageUrl = pageUrl; this.title = title; this.referer = referer; this.cookies = cookies; this.ua = ua; this.media = media; this.fallbackLinks = fallbackLinks;
         Text = "Download video — MRM Zone IDM"; Icon = Theme.AppIcon; Font = Theme.UiFont; BackColor = Color.White;
         Size = new Size(620, 720); StartPosition = FormStartPosition.CenterScreen; TopMost = true;
-        var bottom = new Panel { Dock = DockStyle.Bottom, Height = 52, Padding = new Padding(16, 10, 16, 10), BackColor = Color.FromArgb(0xF6, 0xF8, 0xFB) };
+        // Width must match the form before the right-anchored Close button is added, otherwise the anchor
+        // distance is computed against the default 200px panel and the button ends up off-screen.
+        var bottom = new Panel { Dock = DockStyle.Bottom, Width = ClientSize.Width, Height = 52, Padding = new Padding(16, 10, 16, 10), BackColor = Color.FromArgb(0xF6, 0xF8, 0xFB) };
         queue.Location = new Point(16, 16); bottom.Controls.Add(queue);
         var close = Theme.Btn("Close", false, 90); close.Location = new Point(500, 9); close.Anchor = AnchorStyles.Right | AnchorStyles.Top; close.Click += (_, _) => Close();
         bottom.Controls.Add(close);
@@ -75,11 +77,19 @@ public class VideoForm : Form
         try
         {
             if (!Tools.Ready)
-                await Task.Run(() => Tools.EnsureReady((t, p) => BeginInvoke(() =>
+                await Task.Run(() => Tools.EnsureReady((t, p) =>
                 {
-                    status.Text = "First-time setup of the video engine — " + t;
-                    if (p >= 0) { bar.Style = ProgressBarStyle.Continuous; bar.Value = Math.Clamp(p, 0, 100); } else bar.Style = ProgressBarStyle.Marquee;
-                }), cts.Token));
+                    try
+                    {
+                        BeginInvoke(() =>
+                        {
+                            status.Text = "First-time setup of the video engine — " + t;
+                            if (p >= 0) { bar.Style = ProgressBarStyle.Continuous; bar.Value = Math.Clamp(p, 0, 100); } else bar.Style = ProgressBarStyle.Marquee;
+                        });
+                    }
+                    catch { } // window closed: keep installing in the background
+                }, cts.Token));
+            if (IsDisposed) return;
             bar.Style = ProgressBarStyle.Marquee; status.Text = "Finding all qualities…";
             var info = await Task.Run(() => Ytdlp.Fetch(target, tRef, tCookies, ua, cts.Token));
             if (IsDisposed) return;
@@ -118,7 +128,10 @@ public class VideoForm : Form
             rows.Controls.Add(pic);
             Task.Run(async () =>
             {
-                try { var bytes = await Http.Client.GetByteArrayAsync(info.Thumbnail); var img = Image.FromStream(new MemoryStream(bytes)); BeginInvoke(() => pic.Image = img); } catch { }
+                // GDI+ cannot decode WebP (YouTube's default thumbnail); use the JPEG variant, hide the box on failure
+                var thumb = info.Thumbnail.Contains("/vi_webp/") ? info.Thumbnail.Replace("/vi_webp/", "/vi/").Replace(".webp", ".jpg") : info.Thumbnail;
+                try { var bytes = await Http.Client.GetByteArrayAsync(thumb); var img = Image.FromStream(new MemoryStream(bytes)); BeginInvoke(() => pic.Image = img); }
+                catch { try { BeginInvoke(() => pic.Visible = false); } catch { } }
             });
         }
         rows.Controls.Add(new Label { Text = info.Title, AutoSize = false, Width = rows.ClientSize.Width - 36, Height = 48, Font = new Font("Segoe UI Semibold", 11.5f) });

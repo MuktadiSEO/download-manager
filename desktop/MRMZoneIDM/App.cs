@@ -17,10 +17,13 @@ public static class App
         {
             var url = args.FirstOrDefault(a => a.StartsWith("http", StringComparison.OrdinalIgnoreCase));
             if (url != null) LocalServer.SendToRunning("/add", new { url });
-            else LocalServer.SendToRunning("/show", null);
+            else if (!args.Contains("--tray")) LocalServer.SendToRunning("/show", null); // autostart duplicate: stay quiet
             return;
         }
-        Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
+        // All forms are laid out in fixed 96-DPI pixel coordinates without AutoScaleMode, so per-monitor
+        // awareness would scale fonts but not positions (clipped/overlapping text at 125-150 %).
+        // Let Windows scale the GDI output instead (crisp text, correct layout).
+        Application.SetHighDpiMode(HighDpiMode.DpiUnawareGdiScaled);
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
         Application.ThreadException += (_, e) => LogError(e.Exception);

@@ -13,7 +13,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
-    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <ApplicationHighDpiMode>DpiUnawareGdiScaled</ApplicationHighDpiMode>
     <AssemblyName>MRMZoneIDM</AssemblyName>
     <RootNamespace>MRMZoneIDM</RootNamespace>
     <Product>MRM Zone Internet Download Manager</Product>

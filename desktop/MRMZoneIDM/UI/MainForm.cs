@@ -41,12 +41,25 @@ public class MainForm : Form
         ui.Tick += (_, _) => { if (changed) { changed = false; Refresh2(); } UpdateStatus(); };
         ui.Start();
         AllowDrop = true;
-        DragEnter += (_, e) => e.Effect = e.Data.GetDataPresent(DataFormats.Text) ? DragDropEffects.Copy : DragDropEffects.None;
-        DragDrop += (_, e) => { var u = Http.ExtractUrl(e.Data.GetData(DataFormats.Text) as string); if (u != null) OpenAdd(u); };
+        DragEventHandler enter = (_, e) => e.Effect = e.Data.GetDataPresent(DataFormats.Text) ? DragDropEffects.Copy : DragDropEffects.None;
+        DragEventHandler drop = (_, e) => { var u = Http.ExtractUrl(e.Data.GetData(DataFormats.Text) as string); if (u != null) OpenAdd(u); };
+        DragEnter += enter; DragDrop += drop;
+        list.AllowDrop = true; list.DragEnter += enter; list.DragDrop += drop; // the list covers the form's client area
         ApplyStartup();
     }
 
-    void BeginInvokeSafe(Action a) { try { if (IsHandleCreated) BeginInvoke(a); else a(); } catch { } }
+    // Events from the engine / local server arrive on background threads. Never run UI code on them:
+    // marshal to the UI thread, or queue until the window handle exists (startup, before Application.Run).
+    readonly List<Action> pending = new();
+    void BeginInvokeSafe(Action a)
+    {
+        lock (pending)
+        {
+            if (IsDisposed || Disposing) return;
+            if (!IsHandleCreated) { pending.Add(a); return; }
+        }
+        try { BeginInvoke(a); } catch { }
+    }
 
     protected override void SetVisibleCore(bool value)
     {
@@ -113,7 +126,7 @@ public class MainForm : Form
         T("Grabber", Theme.GGlobe, Theme.Blue, () => new GrabberForm().Show(this));
         T("Batch", Theme.GBatch, Theme.Blue, () => new BatchForm().ShowDialog(this));
         T("Extension", Theme.GPuzzle, Theme.Orange, () => new ExtensionForm().ShowDialog(this));
-        T("Tell a Fr…", Theme.GShare, Theme.Gray, () => { Clipboard.SetText("MRM Zone Internet Download Manager — fast downloads, YouTube in all qualities!"); MessageBox.Show(this, "Message copied — paste it to your friends!", "Tell a friend"); });
+        T("Tell a Fr…", Theme.GShare, Theme.Gray, () => { if (TrySetClipboard("MRM Zone Internet Download Manager — fast downloads, YouTube in all qualities!")) MessageBox.Show(this, "Message copied — paste it to your friends!", "Tell a friend"); });
         var searchBox = new ToolStripTextBox { Alignment = ToolStripItemAlignment.Right, Width = 180, ToolTipText = "Search downloads" };
         searchBox.TextChanged += (_, _) => { search = searchBox.Text; changed = true; };
         tb.Items.Add(searchBox);
@@ -197,14 +210,15 @@ public class MainForm : Form
         m.Items.Add("Redownload", null, (_, _) => ForSelected(d => Manager.Redownload(d.Id)));
         m.Items.Add("Add to queue / remove from queue", null, (_, _) => ForSelected(d => Manager.SetInQueue(d.Id, !d.InQueue)));
         m.Items.Add(new ToolStripSeparator());
-        m.Items.Add("Copy address", null, (_, _) => Selected().FirstOrDefault()?.Let(d => Clipboard.SetText(d.Url)));
+        m.Items.Add("Copy address", null, (_, _) => Selected().FirstOrDefault()?.Let(d => { lastClip = d.Url; TrySetClipboard(d.Url); }));
         m.Items.Add("Properties / refresh address…", null, (_, _) => Selected().FirstOrDefault()?.Let(d => new PropertiesForm(d).ShowDialog(this)));
         m.Items.Add(new ToolStripSeparator());
         m.Items.Add("Delete", null, (_, _) => DeleteSelected());
         return m;
     }
 
-    int sortCol = -1;
+    const int NoSort = int.MinValue;
+    int sortCol = NoSort; // >= 0: ascending column; < 0: descending column (-col - 1)
 
     IEnumerable<DownloadItem> Filtered()
     {
@@ -220,7 +234,7 @@ public class MainForm : Form
         };
         if (!string.IsNullOrWhiteSpace(search)) l = l.Where(x => (x.FileName ?? "").Contains(search, StringComparison.OrdinalIgnoreCase) || (x.Url ?? "").Contains(search, StringComparison.OrdinalIgnoreCase));
         int col = sortCol < 0 ? -sortCol - 1 : sortCol; bool desc = sortCol < 0;
-        if (sortCol == -1) return l;
+        if (sortCol == NoSort) return l;
         Func<DownloadItem, object> key = col switch { 0 => x => x.FileName, 1 => x => x.TotalSize, 2 => x => x.Status, 5 => x => x.LastTry ?? DateTime.MinValue, _ => x => x.CreatedAt };
         return desc ? l.OrderByDescending(key) : l.OrderBy(key);
     }
@@ -332,7 +346,8 @@ public class MainForm : Form
 
     void OpenVideoPrompt()
     {
-        var clip = Http.ExtractUrl(Clipboard.ContainsText() ? Clipboard.GetText() : "");
+        string clip = null;
+        try { clip = Http.ExtractUrl(Clipboard.ContainsText() ? Clipboard.GetText() : ""); } catch { }
         var url = Prompt.Show(this, "Download video", "Paste a YouTube / Facebook / Instagram / TikTok / any video page link:", clip ?? "");
         if (!string.IsNullOrWhiteSpace(url)) VideoForm.Open(url.Trim(), null, null, null, null, null);
     }
@@ -340,12 +355,17 @@ public class MainForm : Form
     void OnCompleted(DownloadItem d)
     {
         if (App.Settings.ShowCompleteDialog) new CompleteForm(d).Show();
-        else { balloonAction = () => OpenFile(d); tray.ShowBalloonTip(5000, "Download complete", d.FileName, ToolTipIcon.Info); }
+        else { balloonAction = () => OpenFile(d); tray.ShowBalloonTip(5000, "Download complete", string.IsNullOrEmpty(d.FileName) ? "file" : d.FileName, ToolTipIcon.Info); }
     }
 
     // ---------------- extension requests ----------------
-    static string Str(JsonElement j, string n) => j.TryGetProperty(n, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
-    static long Lng(JsonElement j, string n) => j.TryGetProperty(n, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetInt64() : -1;
+    static string Str(JsonElement j, string n) => j.ValueKind == JsonValueKind.Object && j.TryGetProperty(n, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+    static long Lng(JsonElement j, string n)
+    {
+        if (j.ValueKind != JsonValueKind.Object || !j.TryGetProperty(n, out var v) || v.ValueKind != JsonValueKind.Number) return -1;
+        if (v.TryGetInt64(out var l)) return l;
+        return v.TryGetDouble(out var dbl) && dbl >= 0 && dbl < long.MaxValue ? (long)dbl : -1; // JS numbers may be floats
+    }
 
     void FromExtensionAdd(JsonElement j)
     {
@@ -360,6 +380,7 @@ public class MainForm : Form
         if (j.TryGetProperty("media", out var arr) && arr.ValueKind == JsonValueKind.Array)
             foreach (var m in arr.EnumerateArray())
             {
+                if (m.ValueKind != JsonValueKind.Object) continue;
                 var u = Str(m, "url"); if (string.IsNullOrEmpty(u)) continue;
                 media.Add(new MediaRef { Url = u, Type = Str(m, "type"), Kind = Str(m, "kind") ?? "file", Referer = Str(m, "referer"), Size = Lng(m, "size"), Cookies = Str(m, "cookies") });
             }
@@ -441,7 +462,8 @@ public class MainForm : Form
         Task.Run(() =>
         {
             string r; try { r = Tools.Update(); } catch (Exception e) { r = "Update failed: " + e.Message; }
-            BeginInvokeSafe(() => { f.Close(); MessageBox.Show(this, r + "\n\nyt-dlp version: " + Tools.Version(), "Video engine"); });
+            var ver = Tools.Version(); // runs yt-dlp: keep it off the UI thread
+            BeginInvokeSafe(() => { f.Close(); MessageBox.Show(this, r + "\n\nyt-dlp version: " + ver, "Video engine"); });
         });
     }
 
@@ -452,12 +474,24 @@ public class MainForm : Form
         "• Queue, scheduler, speed limiter, site grabber, batch download\n\nFiles are saved in:\n" + App.Settings.BaseFolder,
         "About MRM Zone IDM", MessageBoxButtons.OK, MessageBoxIcon.Information);
 
+    bool TrySetClipboard(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return false;
+        try { Clipboard.SetText(text); return true; }
+        catch (Exception e) { MessageBox.Show(this, "Could not copy to the clipboard: " + e.Message, "MRM Zone IDM"); return false; }
+    }
+
     // ---------------- clipboard monitoring ----------------
     [DllImport("user32.dll", SetLastError = true)] static extern bool AddClipboardFormatListener(IntPtr hwnd);
     [DllImport("user32.dll", SetLastError = true)] static extern bool RemoveClipboardFormatListener(IntPtr hwnd);
     const int WM_CLIPBOARDUPDATE = 0x031D;
 
-    protected override void OnHandleCreated(EventArgs e) { base.OnHandleCreated(e); AddClipboardFormatListener(Handle); }
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e); AddClipboardFormatListener(Handle);
+        List<Action> q; lock (pending) { q = pending.ToList(); pending.Clear(); }
+        foreach (var a in q) try { BeginInvoke(a); } catch { }
+    }
     protected override void OnHandleDestroyed(EventArgs e) { RemoveClipboardFormatListener(Handle); base.OnHandleDestroyed(e); }
 
     protected override void WndProc(ref Message m)

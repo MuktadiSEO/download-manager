@@ -19,17 +19,26 @@ public static class Theme
     static Image logo;
     public static Image Logo => logo ??= LoadRes("logo.png");
     static Icon icon;
-    public static Icon AppIcon => icon ??= new Icon(typeof(Theme).Assembly.GetManifestResourceStream("app.ico"));
+    public static Icon AppIcon => icon ??= LoadIcon();
+    static Icon LoadIcon()
+    {
+        using var s = typeof(Theme).Assembly.GetManifestResourceStream("app.ico");
+        return s != null ? new Icon(s) : (Icon)SystemIcons.Application.Clone();
+    }
 
     static Image LoadRes(string name)
     {
+        // GDI+ needs the source stream for the Image's whole lifetime; copy into a standalone bitmap
+        // so disposing the resource stream cannot cause "A generic error occurred in GDI+" later.
         using var s = typeof(Theme).Assembly.GetManifestResourceStream(name);
-        return Image.FromStream(s);
+        if (s == null) return new Bitmap(1, 1);
+        using var img = Image.FromStream(s);
+        return new Bitmap(img);
     }
 
     // Segoe MDL2 Assets / Segoe Fluent Icons glyphs (built into Windows 10/11)
-    public const string GAdd = "", GPlay = "", GPause = "", GStop = "", GDelete = "", GBroom = "",
-        GSettings = "", GClock = "", GQueuePlay = "", GQueueStop = "", GGlobe = "", GShare = "",
+    public const string GAdd = "", GPlay = "", GPause = "", GStop = "", GDelete = "", GBroom = "\uE894",
+        GSettings = "", GClock = "", GQueuePlay = "", GQueueStop = "\uE71A", GGlobe = "", GShare = "",
         GFolder = "", GDownload = "", GPuzzle = "", GVideo = "", GMusic = "", GDoc = "", GZip = "",
         GApp = "", GImage = "", GFile = "", GList = "", GCheck = "", GError = "", GSearch = "",
         GBatch = "", GInfo = "", GLink = "";

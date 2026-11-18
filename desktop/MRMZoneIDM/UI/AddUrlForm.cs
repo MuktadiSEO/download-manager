@@ -58,13 +58,15 @@ public class AddUrlForm : Form
         debounce.Tick += (_, _) => { debounce.Stop(); Probe(); };
         cat.SelectedItem = "General";
         if (!string.IsNullOrEmpty(fileName)) { name.Text = Http.Sanitize(fileName); nameEdited = true; cat.SelectedItem = Categories.FromFileName(fileName); }
-        if (string.IsNullOrEmpty(u) && Clipboard.ContainsText()) u = Http.ExtractUrl(Clipboard.GetText());
+        if (string.IsNullOrEmpty(u)) try { if (Clipboard.ContainsText()) u = Http.ExtractUrl(Clipboard.GetText()); } catch { } // clipboard may be locked
         url.Text = u ?? "";
         Shown += (_, _) => { TopMost = false; Activate(); if (url.Text.Length == 0) url.Focus(); };
+        FormClosed += (_, _) => { debounce.Stop(); debounce.Dispose(); probeCts?.Cancel(); };
     }
 
     async void Probe()
     {
+        if (IsDisposed) return;
         var u = url.Text.Trim();
         if (!u.StartsWith("http", StringComparison.OrdinalIgnoreCase)) return;
         if (Ytdlp.IsVideoSite(u)) { VideoForm.Open(u, null, referer, cookies, ua, null); Close(); return; }
@@ -74,7 +76,7 @@ public class AddUrlForm : Form
         try
         {
             var p = await Http.Probe(u, ua, referer, cookies, ct);
-            if (ct.IsCancellationRequested) return;
+            if (ct.IsCancellationRequested || IsDisposed) return;
             if (p.ContentType != null && p.ContentType.Contains("text/html"))
             {
                 info.Text = "This is a web page — looking for videos on it…";
@@ -86,14 +88,14 @@ public class AddUrlForm : Form
             info.Text = $"Size: {Fmt.Size(p.Size)}     Resume capability: {(p.Resumable ? "Yes ✔" : "No")}     {p.ContentType}";
             info.ForeColor = Theme.Gray;
         }
-        catch (Exception e) when (!ct.IsCancellationRequested)
+        catch (Exception e) when (!ct.IsCancellationRequested && !IsDisposed)
         {
             info.Text = "Could not get file info: " + e.Message + "  (you can still try to download)";
             info.ForeColor = Theme.Red;
             if (!nameEdited && name.Text.Length == 0) name.Text = Http.FileNameFrom(null, u, null);
         }
         catch { }
-        finally { busy.Visible = false; }
+        finally { if (!IsDisposed) busy.Visible = false; }
     }
 
     void Add(bool start)

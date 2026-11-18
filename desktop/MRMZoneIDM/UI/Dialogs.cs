@@ -68,8 +68,15 @@ public class OptionsForm : Form
         var ver = new Label { Text = "yt-dlp version: checking…", AutoSize = true, Location = new Point(20, y) }; v.Controls.Add(ver); y += 30;
         v.Controls.Add(new Label { Text = "The video engine (yt-dlp + FFmpeg + Deno) downloads YouTube and 1000+ sites in every quality.\nIt updates itself once a day so YouTube keeps working.", AutoSize = false, Width = 540, Height = 50, Location = new Point(20, y), ForeColor = Theme.Gray }); y += 60;
         var up = Theme.Btn("Update video engine now", true, 220); up.Location = new Point(20, y); v.Controls.Add(up);
-        Task.Run(() => { var x = Tools.Version(); try { BeginInvoke(() => ver.Text = "yt-dlp version: " + x); } catch { } });
-        up.Click += async (_, _) => { up.Enabled = false; ver.Text = "Updating…"; var r = await Task.Run(() => { try { return Tools.Update(); } catch (Exception e) { return "Failed: " + e.Message; } }); ver.Text = r + "   (version " + Tools.Version() + ")"; up.Enabled = true; };
+        // BeginInvoke needs the window handle: start the version check once the form is loaded
+        Load += (_, _) => Task.Run(() => { var x = Tools.Version(); try { BeginInvoke(() => ver.Text = "yt-dlp version: " + x); } catch { } });
+        up.Click += async (_, _) =>
+        {
+            up.Enabled = false; ver.Text = "Updating…";
+            var r = await Task.Run(() => { try { return Tools.Update() + "   (version " + Tools.Version() + ")"; } catch (Exception e) { return "Failed: " + e.Message; } });
+            if (IsDisposed) return;
+            ver.Text = r; up.Enabled = true;
+        };
 
         var ok = Theme.Btn("OK", true, 100); ok.Location = new Point(398, 454);
         var cancel = Theme.Btn("Cancel", false, 100); cancel.Location = new Point(508, 454); cancel.Click += (_, _) => Close();
@@ -160,9 +167,11 @@ public class LinksForm : Form
         var terms = f.Split(new[] { ' ', ',', ';' }, StringSplitOptions.RemoveEmptyEntries);
         box.BeginUpdate(); box.Items.Clear();
         foreach (var l in all.Where(l => terms.Length == 0 || terms.Any(t => l.ToLowerInvariant().Contains(t))))
-            box.Items.Add(l, Categories.FromFileName(new Uri(l).AbsolutePath) != "General" || all.Count <= 15);
+            box.Items.Add(l, Categories.FromFileName(PathOf(l)) != "General" || all.Count <= 15);
         box.EndUpdate();
     }
+
+    static string PathOf(string u) { try { return new Uri(u).AbsolutePath; } catch { return u; } } // links can be malformed
 
     void AddSel(bool start)
     {
@@ -308,9 +317,16 @@ public class PropertiesForm : Form
         Controls.AddRange(new Control[] { ok, c });
         ok.Click += (_, _) =>
         {
-            if (Manager.Task(d.Id) != null) Manager.Pause(d.Id);
+            var task = Manager.Task(d.Id);
+            if (task != null) { Manager.Pause(d.Id); task.Join(3000); }
             if (url.Text.Trim().StartsWith("http")) d.Url = url.Text.Trim();
-            if (d.Status != DStatus.Completed && !string.IsNullOrWhiteSpace(name.Text)) { d.FileName = Http.Sanitize(name.Text); }
+            if (d.Status != DStatus.Completed && !string.IsNullOrWhiteSpace(name.Text))
+            {
+                var oldTemp = d.TempPath;
+                d.FileName = Http.Sanitize(name.Text);
+                // keep the partial data: the engine only resumes from TempPath, which depends on FileName
+                if (oldTemp != d.TempPath && File.Exists(oldTemp)) try { File.Move(oldTemp, d.TempPath, true); } catch { }
+            }
             d.Description = desc.Text;
             Manager.Update(d); Close();
         };
@@ -368,7 +384,7 @@ public class ExtensionForm : Form
             var exe = chrome ?? edge;
             if (exe == null) { MessageBox.Show(this, "Chrome or Edge was not found. Open your browser and type chrome://extensions in the address bar.", Text); return; }
             try { Process.Start(exe, chrome != null ? "chrome://extensions/" : "edge://extensions/"); } catch { }
-            Clipboard.SetText(chrome != null ? "chrome://extensions" : "edge://extensions");
+            try { Clipboard.SetText(chrome != null ? "chrome://extensions" : "edge://extensions"); } catch { }
         }, true);
         if (chrome != null && edge != null)
         {
@@ -379,11 +395,11 @@ public class ExtensionForm : Form
         Step("3", "Drag the MRM Zone extension folder onto the Extensions page — or click \"Load unpacked\" and select the folder.", "Open extension folder", () =>
         {
             if (!Directory.Exists(ExtDir)) { MessageBox.Show(this, "Extension folder not found: " + ExtDir, Text); return; }
-            Clipboard.SetText(ExtDir);
-            Process.Start("explorer.exe", $"\"{Path.GetDirectoryName(ExtDir)}\"");
+            try { Clipboard.SetText(ExtDir); } catch { }
+            try { Process.Start("explorer.exe", $"\"{Path.GetDirectoryName(ExtDir)}\""); } catch { }
         });
         var path = new TextBox { Text = ExtDir, ReadOnly = true, Width = 520, Location = new Point(58, y - 14) };
-        var copy = Theme.Btn("Copy", false, 70); copy.Height = 27; copy.Location = new Point(586, y - 16); copy.Click += (_, _) => Clipboard.SetText(ExtDir);
+        var copy = Theme.Btn("Copy", false, 70); copy.Height = 27; copy.Location = new Point(586, y - 16); copy.Click += (_, _) => { try { Clipboard.SetText(ExtDir); } catch { } };
         Controls.Add(path); Controls.Add(copy); y += 30;
         Step("4", "Done! Pin the MRM Zone icon in the toolbar. Videos now show a \"Download this video\" button and downloads go to MRM Zone IDM.", null, null);
         var close = Theme.Btn(firstRun ? "Later" : "Close", false, 100); close.Location = new Point(520, 510); close.Click += (_, _) => Close();

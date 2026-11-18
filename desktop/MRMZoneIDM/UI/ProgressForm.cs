@@ -18,6 +18,8 @@ public class ProgressForm : Form
 
     public static void ShowFor(long id)
     {
+        var d = Manager.Get(id);
+        if (d == null || d.Status == DStatus.Completed) { Open.Remove(id); return; } // nothing to show (Render would close it at once)
         if (Open.TryGetValue(id, out var f) && !f.IsDisposed) { f.Show(); f.Activate(); return; }
         f = new ProgressForm(id); Open[id] = f; f.Show();
     }
@@ -65,14 +67,19 @@ public class ProgressForm : Form
         limit.CheckedChanged += (_, _) => ApplyLimit(); limitVal.ValueChanged += (_, _) => { if (limit.Checked) ApplyLimit(); };
         t.Tick += (_, _) => Render();
         t.Start(); Render();
-        FormClosed += (_, _) => { t.Stop(); Open.Remove(id); };
+        FormClosed += (_, _) => { t.Stop(); t.Dispose(); if (Open.TryGetValue(id, out var o) && o == this) Open.Remove(id); };
     }
 
     void Render()
     {
         var d = Manager.Get(id);
-        if (d == null) { Close(); return; }
-        if (d.Status == DStatus.Completed) { Close(); return; }
+        if (d == null || d.Status == DStatus.Completed)
+        {
+            // Close() before the handle exists (first Render from the constructor) would silently Dispose the form
+            // and the following Show() would throw ObjectDisposedException; the timer closes it on the next tick.
+            if (IsHandleCreated) Close();
+            return;
+        }
         Text = $"{d.Progress}% {d.FileName}";
         vals["File"].Text = d.FileName;
         vals["URL"].Text = d.Url;
