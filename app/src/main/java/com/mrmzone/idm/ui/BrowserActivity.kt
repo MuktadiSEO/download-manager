@@ -56,7 +56,8 @@ import org.json.JSONTokener
  */
 class BrowserActivity : AppCompatActivity() {
     private class Tab(val web: WebView) {
-        val media = linkedSetOf<String>()
+        lateinit var sniffer: MediaSniffer
+        @Volatile var ua: String = DM.prefs.userAgent
         var files: List<String> = emptyList()
         var desktop = false
         var pendingUrl: String? = null          // restored tab, loaded when first shown
@@ -267,6 +268,7 @@ class BrowserActivity : AppCompatActivity() {
     private fun createWebView(): Tab {
         val web = WebView(this)
         val t = Tab(web)
+        t.sniffer = MediaSniffer({ t.ua }) { runOnUiThread { if (tabs.getOrNull(cur) == t) updateFab() } }
         web.settings.apply {
             javaScriptEnabled = true; domStorageEnabled = true; loadWithOverviewMode = true; useWideViewPort = true
             builtInZoomControls = true; displayZoomControls = false; mediaPlaybackRequiresUserGesture = true
@@ -317,7 +319,7 @@ class BrowserActivity : AppCompatActivity() {
         }
         web.webViewClient = object : WebViewClient() {
             override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
-                t.media.clear(); t.files = emptyList()
+                t.sniffer.clear(); t.files = emptyList()
                 t.pageUrl = url; t.blocked = 0
                 t.adOn = AdBlock.enabledFor(DM.prefs, url)
                 if (view == tab.web) { address.setText(url); updateFab(); updateShield() }
@@ -354,9 +356,8 @@ class BrowserActivity : AppCompatActivity() {
                     countBlocked(t)
                     return WebResourceResponse("text/plain", "utf-8", java.io.ByteArrayInputStream(ByteArray(0)))
                 }
-                if (Ytdlp.isYouTube(u) || u.contains("googlevideo.com")) return null // handled by quality picker
-                val ext = u.substringBefore('?').substringAfterLast('/').substringAfterLast('.', "").lowercase()
-                if (ext in mediaExts) runOnUiThread { if (t.media.add(u) && tabs.getOrNull(cur) == t) updateFab() }
+                if (Ytdlp.isYouTube(t.pageUrl) || u.contains("googlevideo.com")) return null // handled by quality picker
+                t.sniffer.onRequest(req, t.pageUrl)
                 return null
             }
         }
@@ -476,7 +477,8 @@ return JSON.stringify(o.slice(0,4000));})()"""
                 val arr = JSONArray(str)
                 (0 until arr.length()).map { arr.getString(it) }
             }.getOrDefault(emptyList())
-            t.files = links.filter { it.startsWith("http") && extOf(it) in fileExts }.distinct()
+            t.files = links.filter { it.startsWith("http") && extOf(it) in fileExts && extOf(it) !in mediaExts }.distinct()
+            links.filter { it.startsWith("http") && (extOf(it) in mediaExts || it.contains(".m3u8")) }.forEach { t.sniffer.addFromDom(it, pageUrl) }
             if (tabs.getOrNull(cur) == t) updateFab()
         }
     }
@@ -485,7 +487,7 @@ return JSON.stringify(o.slice(0,4000));})()"""
 
     private fun isVideoPage(url: String?) = Ytdlp.isYouTubeVideo(url) || (Ytdlp.isVideoSite(url) && !Ytdlp.isYouTube(url))
 
-    private fun allFound(t: Tab) = (t.media + t.files).distinct()
+    private fun allFound(t: Tab) = t.files
 
     private var lastPrefetch: String? = null
 
@@ -502,6 +504,12 @@ return JSON.stringify(o.slice(0,4000));})()"""
         val url = tab.web.url
         maybePrefetch(url)
         val found = allFound(tab).size
+        val vids = tab.sniffer.ready().size
+        if (vids > 0 && !isVideoPage(url)) {
+            fab.visibility = View.VISIBLE
+            fab.text = if (vids == 1) "Download this video" else "Download videos ($vids)"
+            return
+        }
         val video = isVideoPage(url)
         fab.visibility = if (video || found > 0) View.VISIBLE else View.GONE
         val ready = video && url != null && Ytdlp.isReady(url)
@@ -516,6 +524,7 @@ return JSON.stringify(o.slice(0,4000));})()"""
     private fun onFab() {
         val url = tab.web.url ?: return
         val found = allFound(tab)
+        if (!isVideoPage(url) && tab.sniffer.ready().isNotEmpty()) { showMedia(tab); return }
         if (isVideoPage(url) && found.isEmpty()) { openPicker(url); return }
         showFound(url, found)
     }
@@ -541,11 +550,90 @@ return JSON.stringify(o.slice(0,4000));})()"""
         b.show()
     }
 
+    /** IDM-style "Download this video" list: every video found on the page with its qualities and sizes. */
+    private fun showMedia(t: Tab) {
+        val pageUrl = t.web.url.orEmpty()
+        val title = Http.sanitize((t.web.title ?: "video").take(120))
+        var dlg: AlertDialog? = null
+        val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding((16 * dp).toInt(), (4 * dp).toInt(), (16 * dp).toInt(), 0) }
+        fun header(text: String) = list.addView(TextView(this).apply {
+            this.text = text; textSize = 13f; setTypeface(typeface, Typeface.BOLD)
+            setTextColor(ContextCompat.getColor(context, R.color.brand_orange)); setPadding(0, (12 * dp).toInt(), 0, (4 * dp).toInt())
+        })
+        fun row(label: String, detail: String, size: Long, approx: Boolean, onClick: () -> Unit) {
+            val r = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+                setPadding((12 * dp).toInt(), (10 * dp).toInt(), (12 * dp).toInt(), (10 * dp).toInt())
+                background = GradientDrawable().apply { cornerRadius = 10 * dp; setStroke((1 * dp).toInt(), ContextCompat.getColor(context, R.color.seg_bg)) }
+                setOnClickListener { dlg?.dismiss(); onClick() }
+            }
+            r.addView(ImageView(this).apply { setImageResource(R.drawable.ic_cat_video); setColorFilter(ContextCompat.getColor(context, R.color.cat_video)) },
+                LinearLayout.LayoutParams((24 * dp).toInt(), (24 * dp).toInt()))
+            val tx = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding((12 * dp).toInt(), 0, 0, 0) }
+            tx.addView(TextView(this).apply { text = label; textSize = 15f; setTypeface(typeface, Typeface.BOLD) })
+            tx.addView(TextView(this).apply { text = detail; textSize = 12f; maxLines = 1; setTextColor(ContextCompat.getColor(context, R.color.text_secondary)) })
+            r.addView(tx, LinearLayout.LayoutParams(0, -2, 1f))
+            r.addView(TextView(this).apply { text = if (size > 0) (if (approx) "~" else "") + com.mrmzone.idm.util.Fmt.size(size) else ""; textSize = 13f; setTypeface(typeface, Typeface.BOLD) })
+            r.addView(ImageView(this).apply { setImageResource(R.drawable.ic_download); setColorFilter(ContextCompat.getColor(context, R.color.brand_blue)) },
+                LinearLayout.LayoutParams((22 * dp).toInt(), (22 * dp).toInt()).apply { marginStart = (8 * dp).toInt() })
+            list.addView(r, LinearLayout.LayoutParams(-1, -2).apply { topMargin = (6 * dp).toInt() })
+        }
+        val media = t.sniffer.ready()
+        media.forEachIndexed { i, m ->
+            val host = runCatching { java.net.URL(m.url).host }.getOrDefault("")
+            when (m.kind) {
+                MediaSniffer.Kind.HLS -> {
+                    header("VIDEO ${i + 1} • HLS stream" + if (m.duration > 0) " • ${com.mrmzone.idm.util.Fmt.time(m.duration.toLong())}" else "")
+                    if (m.variants.isEmpty()) row("Best quality", host, -1, false) { startStream(t, m, null, title) }
+                    else m.variants.forEach { v -> row(v.label, "MP4 • $host", v.size, true) { startStream(t, m, v, title) } }
+                }
+                MediaSniffer.Kind.DASH -> {
+                    header("VIDEO ${i + 1} • DASH stream")
+                    row("Best quality", host, -1, false) { startStream(t, m, null, title) }
+                }
+                MediaSniffer.Kind.FILE -> {
+                    header("VIDEO ${i + 1} • file")
+                    val name = Http.fileNameFrom(null, m.url, m.type).let { if (it.endsWith(".bin")) "$title.mp4" else it }
+                    row(name.take(40), (m.type ?: "") + " • " + host, m.size, false) {
+                        startAdd(m.url, name, t, m.referer)
+                    }
+                }
+            }
+        }
+        val checking = t.sniffer.checking()
+        if (checking > 0) list.addView(TextView(this).apply { text = "Still checking $checking more…"; textSize = 12f; setPadding(0, (8 * dp).toInt(), 0, 0) })
+        val b = MaterialAlertDialogBuilder(this).setTitle("Videos on this page")
+            .setView(ScrollView(this).apply { addView(list) })
+            .setNegativeButton("Close", null)
+            .setNeutralButton("Smart detect") { _, _ -> openPicker(pageUrl) }
+        if (t.files.isNotEmpty()) b.setPositiveButton("Other files (${t.files.size})") { _, _ -> showFound(pageUrl, t.files) }
+        dlg = b.show()
+    }
+
+    /** HLS / DASH → yt-dlp downloads all pieces and joins them into one MP4. */
+    private fun startStream(t: Tab, m: MediaSniffer.Media, v: MediaSniffer.Variant?, title: String) {
+        val spec = when {
+            v == null -> "bv*+ba/b"
+            v.height > 0 -> "bv*[height<=${v.height}]+ba/b[height<=${v.height}]/b"
+            else -> "best"
+        }
+        val label = v?.label?.let { " [$it]" } ?: ""
+        val item = com.mrmzone.idm.data.DownloadItem(
+            url = m.url, fileName = Http.sanitize("$title$label.mp4"), category = Category.VIDEO,
+            totalSize = v?.size ?: -1, resumable = true, connections = DM.prefs.maxConnections.coerceAtMost(16),
+            referer = m.referer, userAgent = t.ua, cookies = CookieManager.getInstance().getCookie(m.url),
+            description = t.web.url, kind = "ytdlp", formatSpec = spec, extra = "mp4",
+        )
+        DM.add(item, true)
+        Toast.makeText(this, "Downloading$label…", Toast.LENGTH_SHORT).show()
+        if (DM.prefs.showStartDialog) startActivity(Intent(this, ProgressActivity::class.java).putExtra("id", item.id))
+    }
+
     private fun openPicker(url: String) {
         startActivity(Intent(this, VideoQualityActivity::class.java).putExtra("url", url))
     }
 
-    private fun startAdd(url: String, name: String?, t: Tab) {
+    private fun startAdd(url: String, name: String?, t: Tab, referer: String? = null) {
         val title = t.web.title
         val guessed = name ?: run {
             val n = Http.fileNameFrom(null, url, null)
@@ -553,7 +641,7 @@ return JSON.stringify(o.slice(0,4000));})()"""
         }
         startActivity(Intent(this, AddDownloadActivity::class.java)
             .putExtra("url", url).putExtra("name", guessed)
-            .putExtra("referer", t.web.url).putExtra("ua", t.web.settings.userAgentString)
+            .putExtra("referer", referer ?: t.web.url).putExtra("ua", t.web.settings.userAgentString)
             .putExtra("cookies", CookieManager.getInstance().getCookie(url)))
     }
 
@@ -580,6 +668,9 @@ return JSON.stringify(o.slice(0,4000));})()"""
                 5 -> openDownloads()
                 6 -> {
                     tab.desktop = !tab.desktop
+                    tab.ua = if (tab.desktop)
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+                    else DM.prefs.userAgent
                     tab.web.settings.userAgentString = if (tab.desktop)
                         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
                     else DM.prefs.userAgent

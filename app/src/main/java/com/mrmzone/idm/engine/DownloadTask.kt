@@ -111,6 +111,12 @@ class DownloadTask(
             val limitKb = listOf(item.speedLimitKb, DM.prefs.speedLimitKb).filter { it > 0 }.minOrNull()
             if (limitKb != null) req.addOption("-r", "${limitKb}K")
             if (!item.userAgent.isNullOrBlank()) req.addOption("--user-agent", item.userAgent!!)
+            // streams found in the browser often need the page's referer + cookies
+            item.referer?.takeIf { it.startsWith("http") }?.let { ref ->
+                req.addOption("--referer", ref)
+                runCatching { val r = java.net.URL(ref); req.addOption("--add-header", "Origin:${r.protocol}://${r.host}") }
+            }
+            item.cookies?.takeIf { it.isNotBlank() }?.let { req.addOption("--add-header", "Cookie:$it") }
 
             val prog = Ytdlp.Progress()
             var lastEmit = 0L
