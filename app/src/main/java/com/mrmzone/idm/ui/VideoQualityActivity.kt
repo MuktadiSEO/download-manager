@@ -68,10 +68,11 @@ class VideoQualityActivity : AppCompatActivity() {
 
     private fun load() {
         body.removeAllViews()
+        Ytdlp.cached(url)?.let { spinner.visibility = View.GONE; show(it); return }
         spinner.visibility = View.VISIBLE
-        status.text = "Finding all qualities… (first time can take ~20 seconds)"
+        status.text = "Finding all qualities…"
         Thread {
-            val r = runCatching { Ytdlp.fetch(this, url) }
+            val r = runCatching { Ytdlp.get(this, url) }
             runOnUiThread {
                 if (isFinishing) return@runOnUiThread
                 spinner.visibility = View.GONE
@@ -90,9 +91,10 @@ class VideoQualityActivity : AppCompatActivity() {
         status.text = "Could not read this video:\n$msg"
         val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(0, (12 * dp).toInt(), 0, 0) }
         fun btn(t: String, a: () -> Unit) = box.addView(MaterialButton(this).apply { text = t; setOnClickListener { a() } })
-        btn("Try again") { load() }
+        btn("Try again") { Ytdlp.invalidate(url); load() }
         btn("Update video engine & retry") {
             status.text = "Updating yt-dlp…"; spinner.visibility = View.VISIBLE
+            Ytdlp.invalidate(url)
             Thread { val s = runCatching { Ytdlp.update(this) }.getOrElse { "Update failed: ${it.message}" }
                 runOnUiThread { Toast.makeText(this, s, Toast.LENGTH_LONG).show(); load() } }.start()
         }
@@ -157,7 +159,7 @@ class VideoQualityActivity : AppCompatActivity() {
         texts.addView(TextView(this).apply { text = q.label; textSize = 16f; setTypeface(typeface, Typeface.BOLD) })
         texts.addView(TextView(this).apply { text = q.detail; textSize = 12f; setTextColor(ContextCompat.getColor(context, R.color.text_secondary)) })
         l.addView(texts, LinearLayout.LayoutParams(0, -2, 1f))
-        l.addView(TextView(this).apply { text = if (q.size > 0) Fmt.size(q.size) else ""; textSize = 13f; setTypeface(typeface, Typeface.BOLD) })
+        l.addView(TextView(this).apply { text = if (q.size > 0) (if (q.approx) "~" else "") + Fmt.size(q.size) else ""; textSize = 13f; setTypeface(typeface, Typeface.BOLD) })
         l.addView(ImageView(this).apply { setImageResource(R.drawable.ic_download); setColorFilter(ContextCompat.getColor(context, R.color.brand_blue)) },
             LinearLayout.LayoutParams((24 * dp).toInt(), (24 * dp).toInt()).apply { marginStart = (10 * dp).toInt() })
         card.addView(l)

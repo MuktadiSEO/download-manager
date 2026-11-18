@@ -7,6 +7,9 @@ import com.yausername.youtubedl_android.YoutubeDL
 import com.yausername.youtubedl_android.YoutubeDLRequest
 import com.yausername.youtubedl_android.mapper.VideoFormat
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executors
+import java.util.concurrent.FutureTask
 import java.net.URL
 
 /** Wrapper around yt-dlp (YouTube + 1000 other video sites): info, quality list, download & self-update. */
@@ -22,6 +25,7 @@ object Ytdlp {
         val extra: String?,      // merge container or "mp3"
         val size: Long,          // estimated bytes, -1 unknown
         val audioOnly: Boolean,
+        val approx: Boolean = false, // size estimated from bitrate x duration
     )
 
     class Info(val title: String, val thumbnail: String?, val duration: Int, val uploader: String?, val pageUrl: String, val qualities: List<Quality>)
@@ -97,10 +101,68 @@ object Ytdlp {
     private fun VideoFormat.bytes() = if (fileSize > 0) fileSize else if (fileSizeApproximate > 0) fileSizeApproximate else -1L
     private fun VideoFormat.isStoryboard() = formatId?.startsWith("sb") == true || ext == "mhtml"
 
+    // ---------------- cache + background prefetch ----------------
+    private class Cached(val time: Long, val info: Info)
+    private val cache = ConcurrentHashMap<String, Cached>()
+    private val inflight = ConcurrentHashMap<String, FutureTask<Info>>()
+    private val prefetchExec = Executors.newSingleThreadExecutor { r -> Thread(r, "yt-prefetch") }
+    @Volatile private var wantedKey: String? = null
+    private const val TTL = 30 * 60_000L
+    /** Called on the main thread when a prefetch finishes (key = video key). */
+    @Volatile var onPrefetched: ((String) -> Unit)? = null
+
+    /** Same video -> same key, whether it came as youtube.com/watch?v=, youtu.be/, shorts/ ... */
+    fun key(url: String): String {
+        if (isYouTube(url)) {
+            Regex("(?:[?&]v=|youtu\\.be/|/shorts/|/live/|/embed/)([A-Za-z0-9_-]{11})").find(url)?.let { return "yt:" + it.groupValues[1] }
+        }
+        return url.substringBefore('#')
+    }
+
+    fun cached(url: String): Info? = cache[key(url)]?.takeIf { System.currentTimeMillis() - it.time < TTL }?.info
+
+    fun isReady(url: String) = cached(url) != null
+
+    fun invalidate(url: String) { cache.remove(key(url)) }
+
+    /** Start reading the qualities in the background (latest video wins; older queued ones are skipped). */
+    fun prefetch(ctx: Context, url: String) {
+        val k = key(url)
+        wantedKey = k
+        if (cached(url) != null || inflight.containsKey(k)) return
+        val app = ctx.applicationContext
+        val task = FutureTask<Info> {
+            if (wantedKey != k) throw java.util.concurrent.CancellationException("skipped")
+            fetch(app, url)
+        }
+        inflight[k] = task
+        prefetchExec.execute {
+            task.run()
+            inflight.remove(k, task)
+            if (runCatching { task.get() }.isSuccess) android.os.Handler(android.os.Looper.getMainLooper()).post { onPrefetched?.invoke(k) }
+        }
+    }
+
+    /** Cached result, or wait for a running prefetch of the same video, or fetch now. */
+    fun get(ctx: Context, url: String): Info {
+        cached(url)?.let { return it }
+        val t = inflight[key(url)]
+        if (t != null) runCatching { t.get() }.getOrNull()?.let { return it }
+        return fetch(ctx, url)
+    }
+
+    private fun estimate(f: VideoFormat, duration: Int): Pair<Long, Boolean> {
+        val b = f.bytes()
+        if (b > 0) return b to false
+        val rate = if (f.tbr > 0) f.tbr else if (f.abr > 0) f.abr else 0
+        return if (rate > 0 && duration > 0) (rate.toLong() * 1000 / 8 * duration) to true else -1L to false
+    }
+
     fun fetch(ctx: Context, url: String): Info {
         ensureInit(ctx)
         val req = YoutubeDLRequest(url).addOption("--no-playlist")
         val info = YoutubeDL.getInstance().getInfo(req)
+        val dur = info.duration
         val formats = info.formats.orEmpty().filter { !it.isStoryboard() && !it.formatId.isNullOrBlank() }
         val audios = formats.filter { it.isAudioOnly() }
         val bestM4a = audios.filter { it.ext == "m4a" }.maxByOrNull { maxOf(it.abr, it.tbr) }
@@ -127,8 +189,9 @@ object Ytdlp {
                 h >= 4320 -> "8K"; h >= 2160 -> "4K"; h >= 1440 -> "2K"; h >= 1080 -> "Full HD"; h >= 720 -> "HD"; else -> "SD"
             }
             val codec = best.vcodec.orEmpty().let { when { it.startsWith("avc") -> "H.264"; it.startsWith("vp") -> "VP9"; it.startsWith("av01") -> "AV1"; else -> it.substringBefore('.').uppercase() } }
+            val (vSize, vApprox) = estimate(best, dur)
             if (best.hasAudio()) {
-                out += Quality("${h}p$fpsTxt", "${best.ext?.uppercase()} • $name • $codec", best.formatId!!, best.ext ?: "mp4", null, best.bytes(), false)
+                out += Quality("${h}p$fpsTxt", "${best.ext?.uppercase()} • $name • $codec", best.formatId!!, best.ext ?: "mp4", null, vSize, false, vApprox)
             } else {
                 val (aud, merge) = when {
                     best.ext == "mp4" && bestM4a != null -> bestM4a to "mp4"
@@ -136,18 +199,21 @@ object Ytdlp {
                     else -> bestAudio to "mkv"
                 }
                 val spec = if (aud != null) "${best.formatId}+${aud.formatId}" else "${best.formatId}+bestaudio/best"
-                val size = if (best.bytes() > 0) best.bytes() + (aud?.bytes()?.coerceAtLeast(0) ?: 0) else -1
-                out += Quality("${h}p$fpsTxt", "${merge.uppercase()} • $name • $codec", spec, merge, merge, size, false)
+                val (aSize, aApprox) = if (aud != null) estimate(aud, dur) else (0L to false)
+                val size = if (vSize > 0) vSize + aSize.coerceAtLeast(0) else -1
+                out += Quality("${h}p$fpsTxt", "${merge.uppercase()} • $name • $codec", spec, merge, merge, size, false, vApprox || aApprox)
             }
         }
-        if (bestM4a != null) out += Quality("Audio", "M4A • ${maxOf(bestM4a.abr, bestM4a.tbr)} kbps", bestM4a.formatId!!, "m4a", null, bestM4a.bytes(), true)
-        if (bestAudio != null) out += Quality("MP3", "MP3 • converted from best audio", bestAudio.formatId!!, "mp3", "mp3", bestAudio.bytes(), true)
+        if (bestM4a != null) estimate(bestM4a, dur).let { (sz, ap) ->
+            out += Quality("Audio", "M4A • ${maxOf(bestM4a.abr, bestM4a.tbr)} kbps", bestM4a.formatId!!, "m4a", null, sz, true, ap) }
+        if (bestAudio != null) estimate(bestAudio, dur).let { (sz, ap) ->
+            out += Quality("MP3", "MP3 • converted from best audio", bestAudio.formatId!!, "mp3", "mp3", sz, true, ap) }
         if (out.isEmpty()) {
             // sites without a detailed format list: let yt-dlp pick the best
             out += Quality("Best", "Best available quality", "bv*+ba/b", info.ext ?: "mp4", "mp4", info.fileSize.takeIf { it > 0 } ?: -1, false)
             out += Quality("MP3", "Audio only (MP3)", "ba/b", "mp3", "mp3", -1, true)
         }
-        return Info(
+        val result = Info(
             title = info.title ?: info.fulltitle ?: "video",
             thumbnail = info.thumbnail,
             duration = info.duration,
@@ -155,6 +221,8 @@ object Ytdlp {
             pageUrl = info.webpageUrl ?: url,
             qualities = out,
         )
+        cache[key(url)] = Cached(System.currentTimeMillis(), result)
+        return result
     }
 
     private val sizeRe = Regex("""of\s+~?\s*([\d.]+)\s*([KMGT]i?B)""")

@@ -159,8 +159,11 @@ class BrowserActivity : AppCompatActivity() {
         intent.getStringExtra("url")?.let { newTab(it) }
     }
 
-    override fun onStart() { super.onStart(); DM.listeners.add(dmListener); updateBadge() }
-    override fun onStop() { DM.listeners.remove(dmListener); super.onStop() }
+    override fun onStart() {
+        super.onStart(); DM.listeners.add(dmListener); updateBadge()
+        Ytdlp.onPrefetched = { if (cur in tabs.indices) updateFab() }
+    }
+    override fun onStop() { DM.listeners.remove(dmListener); Ytdlp.onPrefetched = null; super.onStop() }
 
     private fun iconBtn(icon: Int, a: () -> Unit) = ImageButton(this).apply {
         setImageResource(icon); setColorFilter(0xFFFFFFFF.toInt()); background = null
@@ -353,15 +356,28 @@ return JSON.stringify(o.slice(0,4000));})()"""
 
     private fun allFound(t: Tab) = (t.media + t.files).distinct()
 
+    private var lastPrefetch: String? = null
+
+    private fun maybePrefetch(url: String?) {
+        if (url == null || !isVideoPage(url)) return
+        val k = Ytdlp.key(url)
+        if (k == lastPrefetch) return
+        lastPrefetch = k
+        Ytdlp.prefetch(this, url)
+    }
+
     private fun updateFab() {
         if (cur !in tabs.indices) return
         val url = tab.web.url
+        maybePrefetch(url)
         val found = allFound(tab).size
         val video = isVideoPage(url)
         fab.visibility = if (video || found > 0) View.VISIBLE else View.GONE
+        val ready = video && url != null && Ytdlp.isReady(url)
+        val dv = if (ready) "Download video ✓" else "Download video"
         fab.text = when {
-            video && found > 0 -> "Download video • files ($found)"
-            video -> "Download video"
+            video && found > 0 -> "$dv • files ($found)"
+            video -> dv
             else -> "Downloadable files ($found)"
         }
     }
