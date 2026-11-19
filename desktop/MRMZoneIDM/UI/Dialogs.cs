@@ -357,6 +357,54 @@ public class ExtensionForm : Form
         return null;
     }
 
+    [System.Runtime.InteropServices.DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+    [System.Runtime.InteropServices.DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint pid);
+
+    static bool BrowserInFront(string exe)
+    {
+        try
+        {
+            var h = GetForegroundWindow(); if (h == IntPtr.Zero) return false;
+            GetWindowThreadProcessId(h, out var pid);
+            using var p = Process.GetProcessById((int)pid);
+            return string.Equals(p.ProcessName, Path.GetFileNameWithoutExtension(exe), StringComparison.OrdinalIgnoreCase);
+        }
+        catch { return false; }
+    }
+
+    /// <summary>
+    /// Chrome/Edge refuse chrome:// URLs passed by other programs, so: open a new browser window,
+    /// wait until it is in front, then type the address into it (Ctrl+L, paste, Enter).
+    /// If the window never comes to the front, the address stays on the clipboard with instructions.
+    /// </summary>
+    async void OpenExtensionsPage(string exe, string page)
+    {
+        try { Clipboard.SetText(page); } catch { }
+        try { Process.Start(exe, "--new-window"); }
+        catch { MessageBox.Show(this, $"Could not start the browser. Open it and type {page} in the address bar.", Text); return; }
+        for (int i = 0; i < 40; i++)
+        {
+            await Task.Delay(250);
+            if (!BrowserInFront(exe)) continue;
+            await Task.Delay(700); // let the new window finish opening
+            if (!BrowserInFront(exe)) continue;
+            try
+            {
+                try { Clipboard.SetText(page); } catch { }
+                SendKeys.SendWait("^l");
+                await Task.Delay(150);
+                SendKeys.SendWait("^v");
+                await Task.Delay(100);
+                SendKeys.SendWait("{ENTER}");
+                return;
+            }
+            catch { break; }
+        }
+        MessageBox.Show(this,
+            $"Your browser is open.\n\nClick its address bar, press Ctrl+V and then Enter.\n(The address {page} is already copied.)",
+            "Open the Extensions page", MessageBoxButtons.OK, MessageBoxIcon.Information);
+    }
+
     public ExtensionForm(bool firstRun = false)
     {
         Text = "Install browser extension — MRM Zone IDM"; Icon = Theme.AppIcon; Font = Theme.UiFont; ClientSize = new Size(680, 600); FormBorderStyle = FormBorderStyle.FixedDialog; MaximizeBox = false; StartPosition = FormStartPosition.CenterScreen; BackColor = Color.White;
@@ -383,12 +431,11 @@ public class ExtensionForm : Form
         {
             var exe = chrome ?? edge;
             if (exe == null) { MessageBox.Show(this, "Chrome or Edge was not found. Open your browser and type chrome://extensions in the address bar.", Text); return; }
-            try { Process.Start(exe, chrome != null ? "chrome://extensions/" : "edge://extensions/"); } catch { }
-            try { Clipboard.SetText(chrome != null ? "chrome://extensions" : "edge://extensions"); } catch { }
+            OpenExtensionsPage(exe, chrome != null ? "chrome://extensions" : "edge://extensions");
         }, true);
         if (chrome != null && edge != null)
         {
-            var eb = Theme.Btn("Open Edge Extensions", false, BtnW); eb.Location = new Point(BtnX, y - 14); eb.Click += (_, _) => { try { Process.Start(edge, "edge://extensions/"); } catch { } };
+            var eb = Theme.Btn("Open Edge Extensions", false, BtnW); eb.Location = new Point(BtnX, y - 14); eb.Click += (_, _) => OpenExtensionsPage(edge, "edge://extensions");
             Controls.Add(eb); y += 34;
         }
         Step("2", "Turn ON \"Developer mode\" (switch at the top-right of the Extensions page; in Edge it is on the left).", null, null);

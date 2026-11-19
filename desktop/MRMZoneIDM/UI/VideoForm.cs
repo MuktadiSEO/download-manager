@@ -8,7 +8,7 @@ public class MediaRef { public string Url, Type, Kind, Referer, Cookies; public 
 public class VideoForm : Form
 {
     readonly FlowLayoutPanel rows = new() { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true, Padding = new Padding(16, 8, 16, 8), BackColor = Color.White };
-    readonly Label status = new() { Dock = DockStyle.Top, Height = 30, Padding = new Padding(16, 8, 16, 0), ForeColor = Theme.Gray };
+    readonly Label status = new() { Dock = DockStyle.Top, Height = 38, Padding = new Padding(16, 0, 16, 0), TextAlign = ContentAlignment.MiddleLeft, ForeColor = Theme.Gray, Font = new Font("Segoe UI Semibold", 9.5f) };
     readonly ProgressBar bar = new() { Dock = DockStyle.Top, Height = 4, Style = ProgressBarStyle.Marquee };
     readonly CheckBox queue = new() { Text = "Add to queue (download later)", AutoSize = true };
     readonly string pageUrl, title, referer, cookies, ua;
