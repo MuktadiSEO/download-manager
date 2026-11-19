@@ -58,10 +58,47 @@ public static class Ytdlp
         return m.Success ? "yt:" + m.Groups[1].Value : url;
     }
 
+    static readonly ConcurrentDictionary<string, Task<VideoInfo>> Inflight = new();
+    static readonly SemaphoreSlim FetchSlots = new(3, 3);
+
+    public static bool IsCached(string url) => Cache.TryGetValue(Key(url), out var c) && (DateTime.Now - c.t).TotalMinutes < 30;
+
+    /// <summary>Start reading the qualities in the background (browser extension calls this as soon as a video page opens).</summary>
+    public static void Prefetch(string url, string referer = null, string cookies = null, string ua = null)
+    {
+        if (string.IsNullOrEmpty(url) || IsCached(url)) return;
+        _ = Start(url, referer, cookies, ua);
+    }
+
+    /// <summary>Cached result, or the running lookup for the same video, or a new lookup.</summary>
     public static VideoInfo Fetch(string url, string referer = null, string cookies = null, string ua = null, CancellationToken ct = default)
     {
         var key = Key(url);
         if (Cache.TryGetValue(key, out var c) && (DateTime.Now - c.t).TotalMinutes < 30) return c.info;
+        return Start(url, referer, cookies, ua).WaitAsync(ct).GetAwaiter().GetResult();
+    }
+
+    static Task<VideoInfo> Start(string url, string referer, string cookies, string ua)
+    {
+        var key = Key(url);
+        return Inflight.GetOrAdd(key, _ =>
+        {
+            var t = Task.Run(async () =>
+            {
+                await FetchSlots.WaitAsync();
+                try { return FetchNow(url, referer, cookies, ua); }
+                finally { FetchSlots.Release(); }
+            });
+            t.ContinueWith(_ => Inflight.TryRemove(key, out var _x));
+            return t;
+        });
+    }
+
+    static VideoInfo FetchNow(string url, string referer, string cookies, string ua)
+    {
+        var key = Key(url);
+        if (Cache.TryGetValue(key, out var c) && (DateTime.Now - c.t).TotalMinutes < 30) return c.info;
+        var ct = CancellationToken.None;
         Tools.EnsureReady(null, ct);
         var a = CommonArgs();
         a.AddRange(new[] { "-J", "--no-playlist" });

@@ -44,7 +44,8 @@ public class ProgressForm : Form
         Controls.Add(new Label { Text = "Start positions and download progress by connections", AutoSize = true, ForeColor = Theme.Gray, Location = new Point(20, y) }); y += 20;
         seg.Location = new Point(20, y); Controls.Add(seg); y += 30;
         conns.Columns.Add("N.", 40); conns.Columns.Add("Downloaded", 120); conns.Columns.Add("Info", 380);
-        conns.Location = new Point(20, y); Controls.Add(conns); y += 140;
+        conns.Location = new Point(20, y); Controls.Add(conns);
+        try { typeof(Control).GetProperty("DoubleBuffered", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.SetValue(conns, true); } catch { } y += 140;
         limit.Location = new Point(20, y + 6); limitVal.Location = new Point(160, y + 3);
         Controls.Add(limit); Controls.Add(limitVal); Controls.Add(new Label { Text = "KB/sec", AutoSize = true, Location = new Point(256, y + 7) });
         var cbDone = new CheckBox { Text = "Show download complete dialog", AutoSize = true, Location = new Point(330, y + 6), Checked = App.Settings.ShowCompleteDialog };
@@ -70,6 +71,9 @@ public class ProgressForm : Form
         FormClosed += (_, _) => { t.Stop(); t.Dispose(); if (Open.TryGetValue(id, out var o) && o == this) Open.Remove(id); };
     }
 
+    static void SetText(ListViewItem.ListViewSubItem it, string v) { if (it.Text != v) it.Text = v; }
+    void SetLabel(string k, string v) { if (vals[k].Text != (v ?? "")) vals[k].Text = v ?? ""; }
+
     void Render()
     {
         var d = Manager.Get(id);
@@ -80,33 +84,35 @@ public class ProgressForm : Form
             if (IsHandleCreated) Close();
             return;
         }
-        Text = $"{d.Progress}% {d.FileName}";
-        vals["File"].Text = d.FileName;
-        vals["URL"].Text = d.Url;
-        vals["Status"].Text = d.Status == DStatus.Error ? "Error: " + d.Error : d.Status.Text();
+        var title = $"{d.Progress}% {d.FileName}"; if (Text != title) Text = title;
+        SetLabel("File", d.FileName);
+        SetLabel("URL", d.Url);
+        SetLabel("Status", d.Status == DStatus.Error ? "Error: " + d.Error : d.Status.Text());
         vals["Status"].ForeColor = d.Status == DStatus.Error ? Theme.Red : Color.Black;
-        vals["File size"].Text = Fmt.Size(d.TotalSize);
-        vals["Downloaded"].Text = Fmt.Size(d.Downloaded) + (d.TotalSize > 0 ? $"  ( {d.Downloaded * 100.0 / d.TotalSize:0.00} % )" : "");
-        vals["Transfer rate"].Text = d.Status == DStatus.Downloading ? Fmt.Speed(d.Speed) : "";
-        vals["Time left"].Text = d.Status == DStatus.Downloading ? Fmt.Time(d.TimeLeftSec) : "";
-        vals["Resume capability"].Text = d.IsYtdlp || d.Resumable ? "Yes" : d.TotalSize < 0 && d.Downloaded == 0 ? "Unknown" : "No";
-        vals["Save to"].Text = d.SaveDir;
-        bar.Style = d.Status == DStatus.Connecting || d.Status == DStatus.Merging || (d.Status == DStatus.Downloading && d.TotalSize <= 0) ? ProgressBarStyle.Marquee : ProgressBarStyle.Continuous;
+        SetLabel("File size", Fmt.Size(d.TotalSize));
+        SetLabel("Downloaded", Fmt.Size(d.Downloaded) + (d.TotalSize > 0 ? $"  ( {d.Downloaded * 100.0 / d.TotalSize:0.00} % )" : ""));
+        SetLabel("Transfer rate", d.Status == DStatus.Downloading ? Fmt.Speed(d.Speed) : "");
+        SetLabel("Time left", d.Status == DStatus.Downloading ? Fmt.Time(d.TimeLeftSec) : "");
+        SetLabel("Resume capability", d.IsYtdlp || d.Resumable ? "Yes" : d.TotalSize < 0 && d.Downloaded == 0 ? "Unknown" : "No");
+        SetLabel("Save to", d.SaveDir);
+        var style = d.Status == DStatus.Connecting || d.Status == DStatus.Merging || (d.Status == DStatus.Downloading && d.TotalSize <= 0) ? ProgressBarStyle.Marquee : ProgressBarStyle.Continuous;
+        if (bar.Style != style) bar.Style = style;
         if (d.TotalSize > 0) bar.Value = (int)Math.Clamp(d.Downloaded * 1000 / d.TotalSize, 0, 1000);
         pause.Text = d.Status.IsActive() ? "Pause" : "Resume";
         var segs = d.LiveSegments.Count > 0 ? d.LiveSegments : d.Segments ?? new();
         seg.Set(segs, d.TotalSize, d.IsYtdlp ? d.Progress : -1);
-        conns.BeginUpdate();
+        bool rebuild = conns.Items.Count != segs.Count;
+        if (rebuild) conns.BeginUpdate();
         while (conns.Items.Count < segs.Count) conns.Items.Add(new ListViewItem(new[] { "", "", "" }));
         while (conns.Items.Count > segs.Count) conns.Items.RemoveAt(conns.Items.Count - 1);
         for (int i = 0; i < segs.Count; i++)
         {
             var s = segs[i]; var it = conns.Items[i];
-            it.SubItems[0].Text = (i + 1).ToString();
-            it.SubItems[1].Text = Fmt.Size(s.Done);
-            it.SubItems[2].Text = s.Finished ? "Done" : d.Status == DStatus.Downloading ? "Receiving data…" : "Idle";
+            SetText(it.SubItems[0], (i + 1).ToString());
+            SetText(it.SubItems[1], Fmt.Size(s.Done));
+            SetText(it.SubItems[2], s.Finished ? "Done" : d.Status == DStatus.Downloading ? "Receiving data…" : "Idle");
         }
-        conns.EndUpdate();
+        if (rebuild) conns.EndUpdate();
     }
 }
 

@@ -85,6 +85,7 @@ public static class LocalServer
                     case "/add": Fire(OnAdd, body); break;
                     case "/video": Fire(OnVideo, body); break;
                     case "/links": Fire(OnLinks, body); break;
+                    case "/prefetch": Prefetch(body); break;
                     default: code = 404; resp = "{\"ok\":false}"; break;
                 }
             }
@@ -104,6 +105,22 @@ public static class LocalServer
         {
             using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(body) ? "{}" : body);
             ev?.Invoke(doc.RootElement.Clone());
+        }
+        catch { }
+    }
+
+    static void Prefetch(string body)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(body) ? "{}" : body);
+            var r = doc.RootElement;
+            string S(string n) => r.ValueKind == JsonValueKind.Object && r.TryGetProperty(n, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+            var url = S("url") ?? S("pageUrl");
+            if (string.IsNullOrEmpty(url) || !url.StartsWith("http")) return;
+            // video sites: by page URL (no headers); raw streams: with the page's referer + cookies
+            if (S("url") == null) Ytdlp.Prefetch(url);
+            else Ytdlp.Prefetch(url, S("referer"), S("cookies"), null);
         }
         catch { }
     }

@@ -68,8 +68,14 @@ public class MainForm : Form
     }
 
     // ---------------- UI ----------------
+    static void DoubleBuffer(Control c)
+    {
+        try { typeof(Control).GetProperty("DoubleBuffered", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.SetValue(c, true); } catch { }
+    }
+
     void BuildUi()
     {
+        DoubleBuffer(list); DoubleBuffer(tree);
         // header
         var header = Theme.Header("MRM Zone IDM", "Internet Download Manager  •  v" + App.Version);
         extLink.Anchor = AnchorStyles.Top | AnchorStyles.Right;
@@ -253,7 +259,9 @@ public class MainForm : Form
         var items = Filtered().ToList();
         var ids = items.Select(i => i.Id).ToList();
         bool same = list.Items.Count == ids.Count && list.Items.Cast<ListViewItem>().Select(r => (long)r.Tag).SequenceEqual(ids);
-        list.BeginUpdate();
+        // Only rebuild (with BeginUpdate) when rows are added/removed; otherwise just change the
+        // texts that differ, so Windows repaints a few cells instead of wiping the whole list.
+        if (!same) list.BeginUpdate();
         if (!same)
         {
             var sel = Selected().Select(x => x.Id).ToHashSet();
@@ -276,7 +284,7 @@ public class MainForm : Form
             var fc = d.Status switch { DStatus.Error => Theme.Red, DStatus.Completed => Color.FromArgb(0x1B, 0x5E, 0x20), DStatus.Downloading => Theme.Blue, _ => Color.Black };
             if (r.ForeColor != fc) r.ForeColor = fc;
         }
-        list.EndUpdate();
+        if (!same) list.EndUpdate();
     }
 
     static void Set(ListViewItem r, int i, string v) { if (r.SubItems[i].Text != (v ?? "")) r.SubItems[i].Text = v ?? ""; }
@@ -286,13 +294,19 @@ public class MainForm : Form
         var all = Manager.Snapshot();
         bool anyActive = all.Any(x => x.Status == DStatus.Downloading);
         if (anyActive) changed = true;
-        stSpeed.Text = "Speed: " + Fmt.Speed(Manager.TotalSpeed);
-        stActive.Text = $"Active: {Manager.RunningCount}    Total: {all.Count}    Completed: {all.Count(x => x.Status == DStatus.Completed)}";
+        var sp = "Speed: " + Fmt.Speed(Manager.TotalSpeed);
+        if (stSpeed.Text != sp) stSpeed.Text = sp;
+        var act = $"Active: {Manager.RunningCount}    Total: {all.Count}    Completed: {all.Count(x => x.Status == DStatus.Completed)}";
+        if (stActive.Text != act) stActive.Text = act;
         var connected = LocalServer.ExtensionConnected;
-        stExt.Text = connected ? "✓ Browser extension connected" : "Browser extension not connected — click to install";
-        extLink.Text = connected ? "✓ Browser extension connected" : "⚡ Install browser extension";
-        extLink.Parent?.PerformLayout();
-        if (extLink.Parent != null) extLink.Location = new Point(extLink.Parent.Width - extLink.Width - 16, 22);
+        var extText = connected ? "✓ Browser extension connected" : "Browser extension not connected — click to install";
+        if (stExt.Text != extText) stExt.Text = extText;
+        var linkText = connected ? "✓ Browser extension connected" : "⚡ Install browser extension";
+        if (extLink.Text != linkText)
+        {
+            extLink.Text = linkText;
+            if (extLink.Parent != null) extLink.Location = new Point(extLink.Parent.Width - extLink.Width - 16, 22);
+        }
         tray.Text = Manager.RunningCount > 0 ? $"MRM Zone IDM — {Manager.RunningCount} downloading, {Fmt.Speed(Manager.TotalSpeed)}" : "MRM Zone IDM";
     }
 

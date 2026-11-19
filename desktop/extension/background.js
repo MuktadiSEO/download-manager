@@ -475,7 +475,16 @@ chrome.webRequest.onHeadersReceived.addListener(
   (details) => {
     try {
       const media = classifyResponse(details);
-      if (media) quiet(addMedia(details.tabId, media, !details.documentUrl));
+      if (media) {
+        quiet(addMedia(details.tabId, media, !details.documentUrl));
+        // HLS / DASH stream found on any site: read its qualities right away
+        if (media.kind === 'hls' || media.kind === 'dash') {
+          quiet((async () => {
+            const cookies = await getCookieHeader(media.url);
+            maybePrefetch(media.url, { url: media.url, referer: media.referer || details.documentUrl || '', cookies });
+          })());
+        }
+      }
     } catch (_) { /* ignore */ }
   },
   { urls: ['<all_urls>'] },
@@ -488,6 +497,44 @@ chrome.webNavigation.onCommitted.addListener((details) => {
   // Keep the entry for a directly opened media URL (its response arrives before commit).
   quiet(clearMedia(details.tabId, details.url));
 });
+
+// ---------------------------------------------------------------------------
+// Prefetch: as soon as a video page / stream appears, ask the app to read all
+// qualities in the background, so "Download this video" opens instantly (like IDM).
+// ---------------------------------------------------------------------------
+
+const VIDEO_PAGE_RE = new RegExp([
+  '^https?://((www|m|music)\\.)?youtube\\.com/(watch\\?|shorts/|live/)',
+  '^https?://youtu\\.be/',
+  '^https?://([a-z0-9-]+\\.)*facebook\\.com/(.*/videos/|watch|reel/)',
+  '^https?://fb\\.watch/',
+  '^https?://([a-z0-9-]+\\.)*instagram\\.com/(reel|reels|p|tv)/',
+  '^https?://([a-z0-9-]+\\.)*tiktok\\.com/@[^/]+/video/',
+  '^https?://([a-z0-9-]+\\.)*vimeo\\.com/\\d',
+  '^https?://([a-z0-9-]+\\.)*dailymotion\\.com/video/',
+  '^https?://(www\\.)?(x|twitter)\\.com/[^/]+/status/'
+].join('|'), 'i');
+
+const prefetched = new Map(); // url -> last sent time
+
+function maybePrefetch(url, extra) {
+  if (!isHttpUrl(url)) return;
+  const key = url.split('#')[0];
+  const now = Date.now();
+  if ((prefetched.get(key) || 0) > now - 10 * 60 * 1000) return;
+  prefetched.set(key, now);
+  if (prefetched.size > 300) prefetched.delete(prefetched.keys().next().value);
+  quiet(callApp('/prefetch', Object.assign({ pageUrl: key }, extra || {})));
+}
+
+function onVideoPageNav(details) {
+  if (details.frameId !== 0 || details.tabId < 0) return;
+  if (VIDEO_PAGE_RE.test(details.url || '')) maybePrefetch(details.url);
+}
+
+chrome.webNavigation.onCommitted.addListener(onVideoPageNav);
+// YouTube & co. change videos without reloading the page
+chrome.webNavigation.onHistoryStateUpdated.addListener(onVideoPageNav);
 
 chrome.tabs.onRemoved.addListener((tabId) => {
   quiet(chrome.storage.session.remove(mediaKey(tabId)));
