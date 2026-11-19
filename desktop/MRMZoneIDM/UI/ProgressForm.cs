@@ -8,13 +8,13 @@ public class ProgressForm : Form
     static readonly Dictionary<long, ProgressForm> Open = new();
     readonly long id;
     readonly Dictionary<string, Label> vals = new();
-    readonly ProgressBar bar = new() { Width = 560, Height = 18, Maximum = 1000 };
+    readonly SmoothBar bar = new() { Width = 560, Height = 20 };
     readonly SegmentBar seg = new() { Width = 560, Height = 22 };
     readonly ListView conns = new() { View = View.Details, Width = 560, Height = 130, FullRowSelect = true, HeaderStyle = ColumnHeaderStyle.Nonclickable };
     readonly Button pause = Theme.Btn("Pause", true, 110);
     readonly CheckBox limit = new() { Text = "Use speed limiter", AutoSize = true };
     readonly NumericUpDown limitVal = new() { Minimum = 10, Maximum = 1000000, Value = 500, Width = 90 };
-    readonly System.Windows.Forms.Timer t = new() { Interval = 500 };
+    readonly System.Windows.Forms.Timer t = new() { Interval = 250 };
 
     public static void ShowFor(long id)
     {
@@ -96,9 +96,9 @@ public class ProgressForm : Form
         SetLabel("Time left", d.Status == DStatus.Downloading ? Fmt.Time(d.TimeLeftSec) : "");
         SetLabel("Resume capability", d.IsYtdlp || d.Resumable ? "Yes" : d.TotalSize < 0 && d.Downloaded == 0 ? "Unknown" : "No");
         SetLabel("Save to", d.SaveDir);
-        var style = d.Status == DStatus.Connecting || d.Status == DStatus.Merging || (d.Status == DStatus.Downloading && d.TotalSize <= 0) ? ProgressBarStyle.Marquee : ProgressBarStyle.Continuous;
-        if (bar.Style != style) bar.Style = style;
-        if (d.TotalSize > 0) bar.Value = (int)Math.Clamp(d.Downloaded * 1000 / d.TotalSize, 0, 1000);
+        bar.Indeterminate = d.Status == DStatus.Connecting || d.Status == DStatus.Merging || (d.Status == DStatus.Downloading && d.TotalSize <= 0);
+        bar.Active = d.Status == DStatus.Downloading;
+        if (d.TotalSize > 0) bar.Target = Math.Clamp(d.Downloaded / (double)d.TotalSize, 0, 1);
         pause.Text = d.Status.IsActive() ? "Pause" : "Resume";
         var segs = d.LiveSegments.Count > 0 ? d.LiveSegments : d.Segments ?? new();
         seg.Set(segs, d.TotalSize, d.IsYtdlp ? d.Progress : -1);
@@ -114,6 +114,66 @@ public class ProgressForm : Form
             SetText(it.SubItems[2], s.Finished ? "Done" : d.Status == DStatus.Downloading ? "Receiving data…" : "Idle");
         }
         if (rebuild) conns.EndUpdate();
+    }
+}
+
+/// <summary>IDM-style progress bar that glides smoothly to the real value (60 fps) with a moving shine.</summary>
+public class SmoothBar : Control
+{
+    double shown, target; float shine = -0.3f;
+    readonly System.Windows.Forms.Timer anim = new() { Interval = 16 };
+    public bool Indeterminate { get; set; }
+    public bool Active { get; set; } = true;
+    public double Target { get => target; set { target = value; if (shown > target + 0.02) shown = target; } }
+
+    public SmoothBar()
+    {
+        SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.UserPaint | ControlStyles.ResizeRedraw, true);
+        anim.Tick += (_, _) =>
+        {
+            var diff = target - shown;
+            shown = Math.Abs(diff) < 0.0005 ? target : shown + diff * 0.12; // ease toward the real value
+            if (Active || Indeterminate) { shine += Indeterminate ? 0.025f : 0.012f; if (shine > 1.3f) shine = -0.3f; }
+            Invalidate();
+        };
+        anim.Start();
+    }
+
+    protected override void Dispose(bool disposing) { if (disposing) anim.Dispose(); base.Dispose(disposing); }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        var g = e.Graphics; g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+        var r = new Rectangle(0, 0, Width - 1, Height - 1);
+        int rad = Math.Max(2, Height / 2 - 1);
+        using (var bgPath = Theme.Rounded(r, rad))
+        using (var bg = new SolidBrush(Color.FromArgb(0xE6, 0xEA, 0xF0)))
+            g.FillPath(bg, bgPath);
+        g.SetClip(Theme.Rounded(r, rad));
+        if (Indeterminate)
+        {
+            float w = Width * 0.28f, x = shine * Width - w / 2;
+            using var lb = new System.Drawing.Drawing2D.LinearGradientBrush(new RectangleF(x, 0, w, Height), Color.FromArgb(0, 0x22, 0xB1, 0x4C), Color.FromArgb(0x22, 0xB1, 0x4C), 0f);
+            var blend = new System.Drawing.Drawing2D.ColorBlend { Positions = new[] { 0f, .5f, 1f }, Colors = new[] { Color.FromArgb(0, 0x22, 0xB1, 0x4C), Color.FromArgb(0x22, 0xB1, 0x4C), Color.FromArgb(0, 0x22, 0xB1, 0x4C) } };
+            lb.InterpolationColors = blend;
+            g.FillRectangle(lb, x, 0, w, Height);
+            g.ResetClip(); return;
+        }
+        int fw = (int)Math.Round(shown * Width);
+        if (fw > 0)
+        {
+            var fr = new Rectangle(0, 0, fw, Height);
+            using (var fill = new System.Drawing.Drawing2D.LinearGradientBrush(fr, Color.FromArgb(0x3C, 0xC7, 0x5F), Color.FromArgb(0x16, 0x9C, 0x3E), 90f))
+                g.FillRectangle(fill, fr);
+            if (Active)
+            {
+                float w = Math.Min(fw, Width * 0.18f), x = shine * fw - w / 2;
+                using var lb = new System.Drawing.Drawing2D.LinearGradientBrush(new RectangleF(x - 1, 0, w + 2, Height), Color.Transparent, Color.Transparent, 0f);
+                lb.InterpolationColors = new System.Drawing.Drawing2D.ColorBlend { Positions = new[] { 0f, .5f, 1f }, Colors = new[] { Color.FromArgb(0, 255, 255, 255), Color.FromArgb(110, 255, 255, 255), Color.FromArgb(0, 255, 255, 255) } };
+                g.FillRectangle(lb, x, 0, w, Height);
+            }
+        }
+        g.ResetClip();
     }
 }
 

@@ -119,7 +119,10 @@ public class VideoForm : Form
             if (IsDisposed || cts.IsCancellationRequested) return;
             bar.Visible = false;
             if (files.Count > 0) { ShowFiles(files); status.Text = $"{files.Count} video file(s) found"; return; }
-            status.Text = "Could not read this page: " + e.Message;
+            var msg = e.Message ?? "";
+            status.Text = msg.Contains("not a bot", StringComparison.OrdinalIgnoreCase) || msg.Contains("Sign in", StringComparison.OrdinalIgnoreCase) || msg.Contains("cookies", StringComparison.OrdinalIgnoreCase)
+                ? "YouTube asks to sign in. Open this video in Chrome while signed in to YouTube and click the MRM Zone 'Download video' button on the video — your login is then used automatically. Then click Retry."
+                : "Could not read this page: " + msg;
             status.ForeColor = Theme.Red; status.Height = Theme.S(60);
             if (fallbackLinks || !Ytdlp.IsVideoSite(pageUrl ?? ""))
             {
@@ -127,6 +130,9 @@ public class VideoForm : Form
                 b.Click += (_, _) => { new GrabberForm(pageUrl).Show(); Close(); };
                 rows.Controls.Add(b);
             }
+            var rt = Theme.Btn("Retry", true, 120); rt.Size = Theme.S(120, 34);
+            rt.Click += (_, _) => { status.ForeColor = Theme.Gray; status.Height = Theme.S(38); bar.Visible = true; Load2(); };
+            rows.Controls.Add(rt);
             var u = Theme.Btn("Update video engine & retry", false, 260); u.Size = Theme.S(260, 34);
             u.Click += async (_, _) => { status.Text = "Updating yt-dlp…"; bar.Visible = true; await Task.Run(() => { try { Tools.Update(); } catch { } }); status.ForeColor = Theme.Gray; Load2(); };
             rows.Controls.Add(u);

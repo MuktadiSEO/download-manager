@@ -134,8 +134,8 @@ public class DownloadTask
 
     void Loop()
     {
-        long lastBytes = Item.Downloaded, lastTime = Environment.TickCount64, lastSave = lastTime;
-        double ema = 0;
+        long lastSave = Environment.TickCount64;
+        var meter = new SpeedMeter();
         while (!Cancelled && fatal == null)
         {
             lock (segs)
@@ -163,14 +163,10 @@ public class DownloadTask
                 }
                 if (segs.All(s => s.Finished) && workers.IsEmpty) { Item.Downloaded = segs.Sum(s => s.Done); return; }
             }
-            cts.Token.WaitHandle.WaitOne(400);
+            cts.Token.WaitHandle.WaitOne(200);
             var now = Environment.TickCount64;
             long bytes; lock (segs) bytes = segs.Sum(s => s.Done);
-            var dt = Math.Max(1, now - lastTime);
-            var inst = (bytes - lastBytes) * 1000.0 / dt;
-            ema = ema == 0 ? inst : ema * 0.7 + inst * 0.3;
-            lastBytes = bytes; lastTime = now;
-            Item.Downloaded = bytes; Item.Speed = (long)ema; Item.ActiveConnections = workers.Count;
+            Item.Downloaded = bytes; Item.Speed = meter.Add(bytes); Item.ActiveConnections = workers.Count;
             lock (segs) Item.LiveSegments = segs.Select(s => s.Copy()).ToList();
             if (now - lastSave > 3000)
             {

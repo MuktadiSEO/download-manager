@@ -524,7 +524,10 @@ function maybePrefetch(url, extra) {
   if ((prefetched.get(key) || 0) > now - 10 * 60 * 1000) return;
   prefetched.set(key, now);
   if (prefetched.size > 300) prefetched.delete(prefetched.keys().next().value);
-  quiet(callApp('/prefetch', Object.assign({ pageUrl: key }, extra || {})));
+  quiet((async () => {
+    const cookieJar = await cookieJarFor(key);
+    await callApp('/prefetch', Object.assign({ pageUrl: key, cookieJar }, extra || {}));
+  })());
 }
 
 function onVideoPageNav(details) {
@@ -561,6 +564,42 @@ function stripMedia(m) {
   return { url: m.url, type: m.type || '', size: m.size || 0, referer: m.referer || '', kind: m.kind || 'file' };
 }
 
+
+// ---------------------------------------------------------------------------
+// Login cookies for video sites (YouTube "confirm you're not a bot", private
+// Facebook/Instagram videos). Chrome encrypts its cookie store on Windows, so the
+// app's video engine cannot read it; the extension hands them over instead.
+// They are only sent to the local MRM Zone IDM app on 127.0.0.1.
+// ---------------------------------------------------------------------------
+
+const COOKIE_SITES = ['youtube.com', 'facebook.com', 'instagram.com', 'tiktok.com', 'x.com', 'twitter.com', 'vimeo.com', 'dailymotion.com'];
+
+function cookieSiteFor(u) {
+  let host = '';
+  try { host = new URL(u).hostname.toLowerCase(); } catch (_) { return null; }
+  if (host === 'youtu.be') return 'youtube.com';
+  if (host === 'fb.watch') return 'facebook.com';
+  return COOKIE_SITES.find((d) => host === d || host.endsWith('.' + d)) || null;
+}
+
+async function cookieJarFor(u) {
+  const site = cookieSiteFor(u);
+  if (!site) return null;
+  try {
+    const list = await chrome.cookies.getAll({ domain: site });
+    if (!list || !list.length) return null;
+    return {
+      site,
+      cookies: list.map((c) => ({
+        domain: c.domain, path: c.path || '/', secure: !!c.secure, hostOnly: !!c.hostOnly,
+        expires: c.session ? 0 : Math.floor(c.expirationDate || 0), name: c.name, value: c.value
+      }))
+    };
+  } catch (_) {
+    return null;
+  }
+}
+
 async function sendVideo(tabId, { extraSrc, frameUrl, onlyMedia } = {}) {
   const tab = await getTabSafe(tabId);
   const pageUrl = (tab && tab.url) || frameUrl || '';
@@ -590,7 +629,8 @@ async function sendVideo(tabId, { extraSrc, frameUrl, onlyMedia } = {}) {
       media.push({ url: pageUrl, type: 'text/html', size: 0, referer: pageUrl, kind: 'page' });
     }
   }
-  return callApp('/video', { pageUrl, title, media });
+  const cookieJar = await cookieJarFor(pageUrl);
+  return callApp('/video', { pageUrl, title, media, cookieJar });
 }
 
 async function sendAdd({ url, referer, pageUrl, fileName, fileSize }) {

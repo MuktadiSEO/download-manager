@@ -72,7 +72,7 @@ public static class Ytdlp
     }
 
     static readonly ConcurrentDictionary<string, Task<VideoInfo>> Inflight = new();
-    static readonly SemaphoreSlim FetchSlots = new(3, 3);
+    static readonly SemaphoreSlim FetchSlots = new(2, 2);
 
     public static bool IsCached(string url) => Cache.TryGetValue(Key(url), out var c) && (DateTime.Now - c.t).TotalMinutes < 30;
 
@@ -116,17 +116,20 @@ public static class Ytdlp
         var a = CommonArgs();
         a.AddRange(new[] { "-J", "--no-playlist" });
         AddHeaders(a, referer, cookies, ua);
+        var cookieCopy = CookieStore.AddArgs(a, url);
         a.Add(url);
         var psi = new ProcessStartInfo(Tools.YtDlp) { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true,
             StandardOutputEncoding = System.Text.Encoding.UTF8, StandardErrorEncoding = System.Text.Encoding.UTF8 };
         foreach (var x in a) psi.ArgumentList.Add(x);
         psi.Environment["PYTHONIOENCODING"] = "utf-8";
         using var p = Process.Start(psi);
+        LowPriority(p);
         using var reg = ct.Register(() => { try { p.Kill(true); } catch { } });
         var errTask = p.StandardError.ReadToEndAsync();
         var json = p.StandardOutput.ReadToEnd();
         p.WaitForExit();
         var err = errTask.Result;
+        CookieStore.Cleanup(cookieCopy);
         if (p.ExitCode != 0 || string.IsNullOrWhiteSpace(json))
             throw new Exception(LastError(err) ?? "yt-dlp could not read this page");
         var info = Parse(json, url);
@@ -209,6 +212,12 @@ public static class Ytdlp
         return info;
     }
 
+    /// <summary>Background work must never make the PC (or our window) feel slow.</summary>
+    static void LowPriority(Process p)
+    {
+        try { p.PriorityClass = ProcessPriorityClass.BelowNormal; } catch { }
+    }
+
     public static void Kill(long id)
     {
         if (Running.TryRemove(id, out var p)) try { p.Kill(true); } catch { }
@@ -226,7 +235,7 @@ public static class Ytdlp
             "--no-playlist", "-f", item.FormatSpec ?? "bv*+ba/b",
             "-o", Path.Combine(item.SaveDir, baseName + ".%(ext)s"),
             "--no-mtime", "--continue", "--newline", "--progress", "--no-simulate",
-            "--http-chunk-size", "10M", "-N", Math.Clamp(item.Connections, 1, 16).ToString(),
+            "--http-chunk-size", "10M", "-N", Math.Clamp(item.Connections, 1, 6).ToString(),
             "--retries", Math.Max(1, App.Settings.Retries).ToString(), "--fragment-retries", Math.Max(1, App.Settings.Retries).ToString(),
             "--progress-template", "download:MRMP %(progress.downloaded_bytes)s %(progress.total_bytes)s %(progress.total_bytes_estimate)s %(progress.speed)s %(info.format_id)s",
             "--print", "after_move:MRMFILE %(filepath)s",
@@ -239,6 +248,7 @@ public static class Ytdlp
         var limits = new[] { item.SpeedLimitKb, App.Settings.SpeedLimitKb }.Where(x => x > 0).ToArray();
         if (limits.Length > 0) { a.Add("-r"); a.Add(limits.Min() + "K"); }
         AddHeaders(a, item.Referer, item.Cookies, item.UserAgent);
+        var cookieCopy = CookieStore.AddArgs(a, item.Url);
         a.Add(item.Url);
 
         var psi = new ProcessStartInfo(Tools.YtDlp) { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true,
@@ -246,11 +256,13 @@ public static class Ytdlp
         foreach (var x in a) psi.ArgumentList.Add(x);
         psi.Environment["PYTHONIOENCODING"] = "utf-8";
         using var p = Process.Start(psi);
+        LowPriority(p);
         Running[item.Id] = p;
         var err = new System.Text.StringBuilder();
         p.ErrorDataReceived += (_, e) => { if (e.Data != null) lock (err) err.AppendLine(e.Data); };
         p.BeginErrorReadLine();
         string finalPath = null, lastFmt = null; long phaseBase = 0, phaseSize = 0, lastEmit = 0;
+        var meter = new SpeedMeter();
         string line;
         while ((line = p.StandardOutput.ReadLine()) != null)
         {
@@ -267,15 +279,16 @@ public static class Ytdlp
                     long sp = Num(t[4]);
                     if (done >= 0) item.Downloaded = item.TotalSize > 0 ? Math.Min(phaseBase + done, item.TotalSize) : phaseBase + done;
                     if (item.TotalSize <= 0 && total > 0 && lastFmt != null && !lastFmt.Contains('+')) { }
-                    if (sp >= 0) item.Speed = sp;
+                    item.Speed = meter.Add(phaseBase + Math.Max(0, done));
                     item.ActiveConnections = 1;
                 }
             }
             else if (line.StartsWith("[Merger]") || line.StartsWith("[ExtractAudio]") || line.StartsWith("[FixupM") || line.StartsWith("[VideoConvertor]"))
             { item.Status = DStatus.Merging; item.Speed = 0; }
-            if (Environment.TickCount64 - lastEmit > 400) { lastEmit = Environment.TickCount64; onProgress(); }
+            if (Environment.TickCount64 - lastEmit > 200) { lastEmit = Environment.TickCount64; onProgress(); }
         }
         p.WaitForExit();
+        CookieStore.Cleanup(cookieCopy);
         Running.TryRemove(item.Id, out _);
         if (ct.IsCancellationRequested) throw new OperationCanceledException();
         if (p.ExitCode != 0) { string e; lock (err) e = err.ToString(); throw new Exception(LastError(e) ?? "yt-dlp failed"); }

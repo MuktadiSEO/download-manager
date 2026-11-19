@@ -171,8 +171,10 @@ public class MainForm : Form
             int w = list.ClientSize.Width - used - 2;
             list.Columns[6].Width = Math.Max(Theme.S(120), w);
         }
-        list.Resize += (_, _) => FitColumns();
-        list.ColumnWidthChanged += (_, e) => { if (e.ColumnIndex != 6) FitColumns(); };
+        // only when the window is resized (debounced) — never while a column is being dragged
+        var fitTimer = new System.Windows.Forms.Timer { Interval = 150 };
+        fitTimer.Tick += (_, _) => { fitTimer.Stop(); FitColumns(); };
+        list.Resize += (_, _) => { fitTimer.Stop(); fitTimer.Start(); };
         list.DoubleClick += (_, _) => { var d = Selected().FirstOrDefault(); if (d != null) OpenItem(d); };
         list.KeyDown += (_, e) => { if (e.KeyCode == Keys.Delete) DeleteSelected(); if (e.KeyCode == Keys.Enter) { var d = Selected().FirstOrDefault(); if (d != null) OpenItem(d); } };
         list.ColumnClick += (_, e) => { sortCol = e.Column == sortCol ? -sortCol - 1 : e.Column; changed = true; };
@@ -394,6 +396,7 @@ public class MainForm : Form
 
     void FromExtensionVideo(JsonElement j)
     {
+        if (j.ValueKind == JsonValueKind.Object && j.TryGetProperty("cookieJar", out var jar)) CookieStore.Save(jar);
         var media = new List<MediaRef>();
         if (j.TryGetProperty("media", out var arr) && arr.ValueKind == JsonValueKind.Array)
             foreach (var m in arr.EnumerateArray())

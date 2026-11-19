@@ -115,6 +115,7 @@ public static class LocalServer
         {
             using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(body) ? "{}" : body);
             var r = doc.RootElement;
+            if (r.ValueKind == JsonValueKind.Object && r.TryGetProperty("cookieJar", out var jar)) CookieStore.Save(jar);
             string S(string n) => r.ValueKind == JsonValueKind.Object && r.TryGetProperty(n, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
             var url = S("url") ?? S("pageUrl");
             if (string.IsNullOrEmpty(url) || !url.StartsWith("http")) return;
