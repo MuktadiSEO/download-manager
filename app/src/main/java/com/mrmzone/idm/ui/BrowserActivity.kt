@@ -389,7 +389,11 @@ class BrowserActivity : AppCompatActivity() {
         tabs.add(t)
         switchTo(tabs.size - 1)
         // protected file links (hotlink check): open with the site's own page as Referer, the download listener catches the file
-        if (referer != null && url.startsWith("http")) t.web.loadUrl(url, mapOf("Referer" to referer)) else load(t, url)
+        if (referer != null && url.startsWith("http")) {
+            // navigate from a page "on" the site, so the request carries the site's own Referer like a real click
+            val js = org.json.JSONObject.quote(url)
+            t.web.loadDataWithBaseURL(referer, "<html><body><script>location.replace($js)</script></body></html>", "text/html", "utf-8", null)
+        } else load(t, url)
         saveTabs()
     }
 

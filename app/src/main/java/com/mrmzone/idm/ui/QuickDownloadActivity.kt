@@ -111,7 +111,7 @@ class QuickDownloadActivity : AppCompatActivity() {
             var res = runCatching { Http.probe(url, DM.prefs.userAgent, null, cookies) }
             // many sites block links opened outside their own pages (hotlink protection) → retry as if clicked on the site
             if (res.exceptionOrNull()?.message?.let { Regex("HTTP (401|403|406|410|451)").containsMatchIn(it) } == true) {
-                val origin = runCatching { java.net.URL(url).let { "${it.protocol}://${it.host}/" } }.getOrNull()
+                val origin = runCatching { java.net.URL(url).let { "${it.protocol}://${it.authority}/" } }.getOrNull()
                 if (origin != null) {
                     val r2 = runCatching { Http.probe(url, DM.prefs.userAgent, origin, cookies) }
                     if (r2.isSuccess) { referer = origin; res = r2 }
@@ -133,7 +133,7 @@ class QuickDownloadActivity : AppCompatActivity() {
                     if (Regex("HTTP (401|403|406|410|451)").containsMatchIn(e.message.orEmpty())) {
                         // the site only gives the file to a real browser → let the built-in browser fetch it (its cookies + referer)
                         Toast.makeText(this, "This site blocks direct links — getting the file through MRM Zone browser…", Toast.LENGTH_LONG).show()
-                        val origin = runCatching { java.net.URL(url).let { "${it.protocol}://${it.host}/" } }.getOrNull()
+                        val origin = runCatching { java.net.URL(url).let { "${it.protocol}://${it.authority}/" } }.getOrNull()
                         startActivity(Intent(this, BrowserActivity::class.java).putExtra("url", url).putExtra("referer", origin)
                             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
                         finish(); return@runOnUiThread
