@@ -359,25 +359,25 @@ public class ExtensionForm : Form
 
     public ExtensionForm(bool firstRun = false)
     {
-        Text = "Install browser extension — MRM Zone IDM"; Icon = Theme.AppIcon; Font = Theme.UiFont; ClientSize = new Size(640, 560); FormBorderStyle = FormBorderStyle.FixedDialog; MaximizeBox = false; StartPosition = FormStartPosition.CenterScreen; BackColor = Color.White;
+        Text = "Install browser extension — MRM Zone IDM"; Icon = Theme.AppIcon; Font = Theme.UiFont; ClientSize = new Size(680, 600); FormBorderStyle = FormBorderStyle.FixedDialog; MaximizeBox = false; StartPosition = FormStartPosition.CenterScreen; BackColor = Color.White;
         Controls.Add(Theme.Header("Click to install the browser extension", "Catch downloads and 'Download this video' in Chrome / Edge"));
+        const int L = 20, TextX = 60, BtnX = 450, BtnW = 210, Right = 660;
         int y = 80;
-        var status = new Label { AutoSize = false, Width = 600, Height = 26, Location = new Point(20, y), Font = Theme.Bold };
-        Controls.Add(status); y += 34;
+        var status = new Label { AutoSize = false, Width = Right - L, Height = 26, Location = new Point(L, y), Font = Theme.Bold };
+        Controls.Add(status); y += 32;
         Controls.Add(new Label
         {
-            AutoSize = false, Width = 600, Height = 54, Location = new Point(20, y), ForeColor = Theme.Gray,
+            AutoSize = false, Width = Right - L, Height = 44, Location = new Point(L, y), ForeColor = Theme.Gray,
             Text = "Google Chrome only lets you add this kind of extension yourself (it blocks programs from doing it silently, for your safety). It takes 30 seconds, once:"
         });
-        y += 60;
+        y += 54;
         var chrome = FindBrowser("chrome.exe"); var edge = FindBrowser("msedge.exe");
-        Control Step(string n, string text, string btn, Action a, bool primary = false)
+        void Step(string n, string text, string btn, Action a, bool primary = false, int height = 44)
         {
-            var num = new Label { Text = n, Font = new Font("Segoe UI", 16f, FontStyle.Bold), ForeColor = Theme.Orange, AutoSize = true, Location = new Point(20, y) };
-            var l = new Label { Text = text, AutoSize = false, Width = btn == null ? 560 : 330, Height = 48, Location = new Point(58, y + 4) };
-            Controls.Add(num); Controls.Add(l);
-            if (btn != null) { var b = Theme.Btn(btn, primary, 220); b.Location = new Point(400, y + 4); b.Click += (_, _) => a(); Controls.Add(b); }
-            y += 62; return l;
+            Controls.Add(new Label { Text = n, Font = new Font("Segoe UI", 16f, FontStyle.Bold), ForeColor = Theme.Orange, AutoSize = true, Location = new Point(L, y - 4) });
+            Controls.Add(new Label { Text = text, AutoSize = false, Width = (btn == null ? Right : BtnX - 12) - TextX, Height = height, Location = new Point(TextX, y) });
+            if (btn != null) { var bt = Theme.Btn(btn, primary, BtnW); bt.Location = new Point(BtnX, y - 4); bt.Click += (_, _) => a(); Controls.Add(bt); }
+            y += height + 12;
         }
         Step("1", "Open your browser's Extensions page.", chrome != null ? "Open Chrome Extensions" : "Open Edge Extensions", () =>
         {
@@ -388,21 +388,22 @@ public class ExtensionForm : Form
         }, true);
         if (chrome != null && edge != null)
         {
-            var eb = Theme.Btn("Open Edge Extensions", false, 220); eb.Location = new Point(400, y - 20); eb.Click += (_, _) => { try { Process.Start(edge, "edge://extensions/"); } catch { } };
-            Controls.Add(eb); y += 24;
+            var eb = Theme.Btn("Open Edge Extensions", false, BtnW); eb.Location = new Point(BtnX, y - 14); eb.Click += (_, _) => { try { Process.Start(edge, "edge://extensions/"); } catch { } };
+            Controls.Add(eb); y += 34;
         }
         Step("2", "Turn ON \"Developer mode\" (switch at the top-right of the Extensions page; in Edge it is on the left).", null, null);
-        Step("3", "Drag the MRM Zone extension folder onto the Extensions page — or click \"Load unpacked\" and select the folder.", "Open extension folder", () =>
+        Step("3", "Drag the extension folder onto the Extensions page — or click \"Load unpacked\" and select this folder:", "Open extension folder", () =>
         {
             if (!Directory.Exists(ExtDir)) { MessageBox.Show(this, "Extension folder not found: " + ExtDir, Text); return; }
             try { Clipboard.SetText(ExtDir); } catch { }
             try { Process.Start("explorer.exe", $"\"{Path.GetDirectoryName(ExtDir)}\""); } catch { }
         });
-        var path = new TextBox { Text = ExtDir, ReadOnly = true, Width = 520, Location = new Point(58, y - 14) };
-        var copy = Theme.Btn("Copy", false, 70); copy.Height = 27; copy.Location = new Point(586, y - 16); copy.Click += (_, _) => { try { Clipboard.SetText(ExtDir); } catch { } };
-        Controls.Add(path); Controls.Add(copy); y += 30;
+        var copy = Theme.Btn("Copy", false, 80); copy.Height = 28; copy.Location = new Point(Right - 80, y - 2);
+        copy.Click += (_, _) => { try { Clipboard.SetText(ExtDir); copy.Text = "Copied ✓"; } catch { } };
+        var path = new TextBox { Text = ExtDir, ReadOnly = true, Width = copy.Left - 8 - TextX, Location = new Point(TextX, y) };
+        Controls.Add(path); Controls.Add(copy); y += 44;
         Step("4", "Done! Pin the MRM Zone icon in the toolbar. Videos now show a \"Download this video\" button and downloads go to MRM Zone IDM.", null, null);
-        var close = Theme.Btn(firstRun ? "Later" : "Close", false, 100); close.Location = new Point(520, 510); close.Click += (_, _) => Close();
+        var close = Theme.Btn(firstRun ? "Later" : "Close", false, 100); close.Location = new Point(Right - 100, ClientSize.Height - 50); close.Click += (_, _) => Close();
         Controls.Add(close);
         var timer = new System.Windows.Forms.Timer { Interval = 1000 };
         void Upd()

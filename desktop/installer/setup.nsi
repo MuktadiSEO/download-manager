@@ -31,8 +31,14 @@ VIAddVersionKey "LegalCopyright" "MRM Zone"
 !define MUI_WELCOMEPAGE_TITLE "Welcome to ${FULLNAME}"
 !define MUI_WELCOMEPAGE_TEXT "This will install ${FULLNAME} ${VERSION} on your computer.$\r$\n$\r$\n• Fast multi-connection downloads with pause & resume$\r$\n• YouTube and 1000+ video sites in every quality$\r$\n• Chrome / Edge extension: 'Download this video'$\r$\n• Queue, scheduler, speed limiter, site grabber$\r$\n$\r$\nClick Next to continue."
 !define MUI_FINISHPAGE_RUN "$INSTDIR\${EXE}"
-!define MUI_FINISHPAGE_RUN_TEXT "Launch MRM Zone IDM (and set up the browser extension)"
+!define MUI_FINISHPAGE_RUN_TEXT "Launch MRM Zone IDM now"
 !define MUI_ABORTWARNING
+!define MUI_WELCOMEFINISHPAGE_BITMAP "welcome.bmp"
+!define MUI_UNWELCOMEFINISHPAGE_BITMAP "welcome.bmp"
+!define MUI_HEADERIMAGE
+!define MUI_HEADERIMAGE_RIGHT
+!define MUI_HEADERIMAGE_BITMAP "header.bmp"
+!define MUI_FINISHPAGE_TEXT "${FULLNAME} has been installed on your computer.$\r$\n$\r$\nOn first start it will help you add the browser extension to Chrome / Edge.$\r$\n$\r$\nClick Finish to close Setup."
 
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_DIRECTORY
