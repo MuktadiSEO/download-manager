@@ -23,7 +23,7 @@ public class MainForm : Form
     public MainForm(bool startHidden)
     {
         this.startHidden = startHidden;
-        Text = "MRM Zone Internet Download Manager";
+        Text = "MRM Zone Internet Download Manager " + App.Version;
         Icon = Theme.AppIcon;
         Size = new Size(1100, 640); MinimumSize = new Size(760, 420);
         StartPosition = FormStartPosition.CenterScreen;

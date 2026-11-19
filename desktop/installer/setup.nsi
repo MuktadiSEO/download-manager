@@ -49,9 +49,23 @@ VIAddVersionKey "LegalCopyright" "MRM Zone"
 !insertmacro MUI_LANGUAGE "English"
 
 Section "Install"
-  ; close a running copy so files can be replaced
-  nsExec::Exec 'taskkill /F /IM ${EXE}'
-  Sleep 500
+  ; close a running copy (also the one in the tray) so the program file can be replaced
+  DetailPrint "Closing MRM Zone IDM if it is running..."
+  nsExec::Exec 'taskkill /F /T /IM ${EXE}'
+  StrCpy $0 0
+  wait_exit:
+    Sleep 500
+    IntOp $0 $0 + 1
+    ClearErrors
+    Delete "$INSTDIR\${EXE}"
+    IfErrors 0 replaced
+    IntCmp $0 20 0 wait_exit 0
+    nsExec::Exec 'taskkill /F /T /IM ${EXE}'
+    IntCmp $0 40 0 wait_exit 0
+    MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "MRM Zone IDM is still running.$\r$\n$\r$\nRight-click its icon near the clock and choose Exit, then click Retry." IDRETRY wait_exit
+    Abort "Setup cancelled: MRM Zone IDM was still running."
+  replaced:
+  SetOverwrite on
   SetOutPath "$INSTDIR"
   File "..\publish\${EXE}"
   File "..\MRMZoneIDM\Assets\app.ico"
