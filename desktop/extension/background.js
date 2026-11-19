@@ -136,12 +136,34 @@ async function discoverApp(force = false) {
       lastPingOk = Date.now();
       lastPingInfo = info;
       await rememberPort(port);
+      quiet(selfUpdate(info));
       return { port, info };
     }
   }
   lastPingOk = 0;
   lastPingInfo = null;
   return null;
+}
+
+// The app was updated → its install folder holds a newer copy of this extension (loaded "unpacked").
+// Reload so Chrome picks up the new files; at most once per 10 minutes to never loop.
+function newerVersion(a, b) {
+  const pa = String(a || '').split('.').map(Number), pb = String(b || '').split('.').map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const x = pa[i] || 0, y = pb[i] || 0;
+    if (x !== y) return x > y;
+  }
+  return false;
+}
+async function selfUpdate(info) {
+  const bundled = info && info.extVersion;
+  const mine = chrome.runtime.getManifest().version;
+  if (!bundled || !newerVersion(bundled, mine)) return;
+  const key = 'mrmLastSelfReload';
+  const st = await chrome.storage.local.get(key);
+  if (st[key] && Date.now() - st[key] < 10 * 60 * 1000) return;
+  await chrome.storage.local.set({ [key]: Date.now() });
+  chrome.runtime.reload();
 }
 
 async function isAppRunning() {

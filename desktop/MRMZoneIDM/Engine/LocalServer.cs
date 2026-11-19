@@ -80,7 +80,7 @@ public static class LocalServer
                 LastExtensionContact = DateTime.Now;
                 switch (path)
                 {
-                    case "/ping": resp = JsonSerializer.Serialize(new { app = "MRM Zone IDM", version = App.Version }); break;
+                    case "/ping": resp = JsonSerializer.Serialize(new { app = "MRM Zone IDM", version = App.Version, extVersion = BundledExtVersion() }); break;
                     case "/show": OnShow?.Invoke(); break;
                     case "/add": Fire(OnAdd, body); break;
                     case "/video": Fire(OnVideo, body); break;
@@ -107,6 +107,20 @@ public static class LocalServer
             ev?.Invoke(doc.RootElement.Clone());
         }
         catch { }
+    }
+
+    static string extVer;
+    /// <summary>Version of the extension shipped in the install folder (the one Chrome loads unpacked).</summary>
+    static string BundledExtVersion()
+    {
+        if (extVer != null) return extVer;
+        try
+        {
+            using var doc = JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "extension", "manifest.json")));
+            extVer = doc.RootElement.GetProperty("version").GetString();
+        }
+        catch { extVer = ""; }
+        return extVer;
     }
 
     static void Prefetch(string body)
