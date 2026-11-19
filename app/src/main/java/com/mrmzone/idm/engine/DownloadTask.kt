@@ -101,7 +101,7 @@ class DownloadTask(
                 .addOption("--continue")
                 .addOption("--newline")
                 .addOption("--http-chunk-size", "10M")
-                .addOption("-N", item.connections.coerceIn(1, 16))
+                .addOption("-N", item.connections.coerceIn(1, 6))
                 .addOption("--retries", DM.prefs.retries.coerceAtLeast(1))
                 .addOption("--fragment-retries", DM.prefs.retries.coerceAtLeast(1))
             when (val ex = item.extra) {
@@ -117,20 +117,23 @@ class DownloadTask(
                 runCatching { val r = java.net.URL(ref); req.addOption("--add-header", "Origin:${r.protocol}://${r.host}") }
             }
             item.cookies?.takeIf { it.isNotBlank() }?.let { req.addOption("--add-header", "Cookie:$it") }
+            val cookieFile = Ytdlp.addLoginCookies(ctx, req, item.url)
 
             val prog = Ytdlp.Progress()
+            val meter = SpeedMeter()
             var lastEmit = 0L
             item.status = Status.DOWNLOADING
             onUpdate(item)
             YoutubeDL.getInstance().execute(req, processId) { pct, _, line ->
                 val merging = Ytdlp.parseLine(line, pct, prog) { done, _, speed ->
                     item.downloaded = if (item.totalSize > 0) minOf(done, item.totalSize) else done
-                    if (speed >= 0) item.speed = speed
+                    item.speed = meter.add(done)
                 }
                 if (merging && item.status != Status.MOVING) { item.status = Status.MOVING; item.speed = 0; onUpdate(item) }
                 val now = System.currentTimeMillis()
-                if (now - lastEmit > 400) { lastEmit = now; item.activeConnections = 1; onUpdate(item) }
+                if (now - lastEmit > 250) { lastEmit = now; item.activeConnections = 1; onUpdate(item) }
             }
+            cookieFile?.delete()
             if (cancelled) return finish(Status.PAUSED)
             // pick the finished media file
             val outFile = dir.listFiles().orEmpty()
@@ -213,10 +216,8 @@ class DownloadTask(
     }
 
     private fun loop() {
-        var lastBytes = item.downloaded
-        var lastTime = System.currentTimeMillis()
-        var lastSave = lastTime
-        var ema = 0.0
+        var lastSave = System.currentTimeMillis()
+        val meter = SpeedMeter()
         while (!cancelled && fatal == null) {
             synchronized(segs) {
                 // launch workers for idle unfinished segments
@@ -242,15 +243,11 @@ class DownloadTask(
                     return
                 }
             }
-            sleepQuiet(400)
+            sleepQuiet(250)
             val now = System.currentTimeMillis()
             val bytes = segs.sumOf { it.done }
-            val dt = (now - lastTime).coerceAtLeast(1)
-            val inst = (bytes - lastBytes) * 1000.0 / dt
-            ema = if (ema == 0.0) inst else ema * 0.7 + inst * 0.3
-            lastBytes = bytes; lastTime = now
             item.downloaded = bytes
-            item.speed = ema.toLong()
+            item.speed = meter.add(bytes)
             item.activeConnections = workers.size
             synchronized(segs) { item.liveSegments = segs.map { Segment(it.start, it.end, it.done) } }
             if (now - lastSave > 3000) {

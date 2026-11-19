@@ -88,9 +88,17 @@ class VideoQualityActivity : AppCompatActivity() {
             startActivity(Intent(this, BrowserActivity::class.java).putExtra("url", url).addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
             finish(); return
         }
-        status.text = "Could not read this video:\n$msg"
+        val needLogin = msg.contains("not a bot", true) || msg.contains("Sign in", true) || msg.contains("cookies", true) || msg.contains("login", true)
+        status.text = if (needLogin)
+            "YouTube asks you to sign in. Tap \"Sign in to YouTube\" below, log in once in the MRM Zone browser, then come back and tap \"Try again\" — your login will be used automatically."
+        else "Could not read this video:\n$msg"
         val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(0, (12 * dp).toInt(), 0, 0) }
         fun btn(t: String, a: () -> Unit) = box.addView(MaterialButton(this).apply { text = t; setOnClickListener { a() } })
+        if (needLogin) btn("Sign in to YouTube") {
+            startActivity(Intent(this, BrowserActivity::class.java)
+                .putExtra("url", "https://accounts.google.com/ServiceLogin?service=youtube&continue=https%3A%2F%2Fm.youtube.com%2F")
+                .addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
+        }
         btn("Try again") { Ytdlp.invalidate(url); load() }
         btn("Update video engine & retry") {
             status.text = "Updating yt-dlp…"; spinner.visibility = View.VISIBLE

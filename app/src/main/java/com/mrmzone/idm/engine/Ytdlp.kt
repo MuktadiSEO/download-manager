@@ -170,10 +170,36 @@ object Ytdlp {
         return if (rate > 0 && duration > 0) (rate.toLong() * 1000 / 8 * duration) to true else -1L to false
     }
 
+    private val loginSites = listOf("youtube.com", "facebook.com", "instagram.com", "tiktok.com", "x.com", "twitter.com", "vimeo.com", "dailymotion.com")
+
+    /**
+     * Logins made in the app's built-in browser (WebView cookies) are handed to yt-dlp as a cookies.txt,
+     * fixing YouTube's "Sign in to confirm you're not a bot" and private Facebook/Instagram videos.
+     * Returns the temp file to delete afterwards.
+     */
+    fun addLoginCookies(ctx: Context, req: YoutubeDLRequest, url: String): File? {
+        val host = runCatching { URL(url).host.lowercase() }.getOrNull() ?: return null
+        val site = when (host) { "youtu.be" -> "youtube.com"; "fb.watch" -> "facebook.com"; else -> loginSites.firstOrNull { host == it || host.endsWith(".$it") } } ?: return null
+        val cookieStr = runCatching { android.webkit.CookieManager.getInstance().getCookie("https://www.$site") }.getOrNull()
+        if (cookieStr.isNullOrBlank()) return null
+        val sb = StringBuilder("# Netscape HTTP Cookie File\n")
+        cookieStr.split(';').map { it.trim() }.filter { it.contains('=') }.forEach { kv ->
+            val name = kv.substringBefore('=').trim(); val value = kv.substringAfter('=').trim()
+            if (name.isNotEmpty()) sb.append(".$site\tTRUE\t/\tTRUE\t0\t$name\t$value\n")
+        }
+        return runCatching {
+            val f = File(ctx.cacheDir, "cookies-${System.nanoTime()}.txt")
+            f.writeText(sb.toString())
+            req.addOption("--cookies", f.absolutePath)
+            f
+        }.getOrNull()
+    }
+
     fun fetch(ctx: Context, url: String): Info {
         ensureInit(ctx)
         val req = YoutubeDLRequest(url).addOption("--no-playlist")
-        val info = YoutubeDL.getInstance().getInfo(req)
+        val cookieFile = addLoginCookies(ctx, req, url)
+        val info = try { YoutubeDL.getInstance().getInfo(req) } finally { cookieFile?.delete() }
         val dur = info.duration
         val formats = info.formats.orEmpty().filter { !it.isStoryboard() && !it.formatId.isNullOrBlank() }
         val audios = formats.filter { it.isAudioOnly() }
