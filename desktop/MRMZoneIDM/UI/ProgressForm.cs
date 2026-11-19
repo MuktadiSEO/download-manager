@@ -62,6 +62,7 @@ public class ProgressForm : Form
         pause.Location = new Point(360, y);
         var cancel = Theme.Btn("Cancel", false, 100); cancel.Location = new Point(480, y);
         Controls.AddRange(new Control[] { hide, pause, cancel });
+        ClientSize = new Size(600, y + pause.Height + 16);   // fit the buttons (window grows/shrinks with Details)
         pause.Click += (_, _) => { var x = Manager.Get(id); if (x == null) return; if (x.Status.IsActive()) Manager.Pause(id); else Manager.Start(id); };
         cancel.Click += (_, _) =>
         {
