@@ -155,6 +155,39 @@
     try { p.host.remove(); } catch (_) { /* ignore */ }
   }
 
+  // The post caption under the video (Facebook/Instagram) — used as the file title when the site gives none.
+  function firstLine(t) {
+    for (const raw of String(t || '').split(/\n/)) {
+      const l = raw.replace(/https?:\/\/\S+/g, '').replace(/(\s*#[\p{L}\p{N}_]+)+\s*$/u, '').replace(/\s+/g, ' ').trim();
+      if (l.length >= 2 && !/^#/.test(l) && !/^hashtags?\W*$/i.test(l) && !/^see (more|less)$/i.test(l)) return l.slice(0, 140);
+    }
+    return '';
+  }
+  function captionFor(video) {
+    try {
+      const SEL = '[data-ad-preview="message"],[data-ad-comet-preview="message"],[data-ad-rendering-role="story_message"]';
+      let el = video;
+      for (let i = 0; el && i < 25; i++, el = el.parentElement) {
+        const m = el.querySelector && el.querySelector(SEL);
+        if (m && m.innerText && m.innerText.trim()) return firstLine(m.innerText);
+      }
+      if (/(^|\.)(facebook|instagram)\.com$/i.test(location.hostname)) {
+        el = video;
+        for (let i = 0; el && i < 14; i++, el = el.parentElement) {
+          for (const d of el.querySelectorAll ? el.querySelectorAll('div[dir="auto"],span[dir="auto"],h1') : []) {
+            if (d.closest('a,[role="button"],[role="link"]')) continue;
+            const l = firstLine(d.innerText);
+            if (l.length >= 6) return l;
+          }
+        }
+      }
+      const og = document.querySelector('meta[property="og:title"]');
+      const t = firstLine(og && og.content);
+      if (t && !/^(facebook|instagram|video|reels?)$/i.test(t)) return t;
+    } catch (_) { /* ignore */ }
+    return '';
+  }
+
   function onDownloadClick(video, btn, label) {
     const src = video.currentSrc || video.src || '';
     btn.disabled = true;
@@ -166,7 +199,7 @@
         type: 'mrm-video-click',
         src: /^https?:/i.test(src) ? src : '',
         frameUrl: location.href,
-        title: document.title
+        title: captionFor(video) || document.title
       }, (res) => {
         const err = chrome.runtime.lastError;
         done();

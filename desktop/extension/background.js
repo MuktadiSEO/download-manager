@@ -600,10 +600,10 @@ async function cookieJarFor(u) {
   }
 }
 
-async function sendVideo(tabId, { extraSrc, frameUrl, onlyMedia } = {}) {
+async function sendVideo(tabId, { extraSrc, frameUrl, onlyMedia, title: hint } = {}) {
   const tab = await getTabSafe(tabId);
   const pageUrl = (tab && tab.url) || frameUrl || '';
-  const title = (tab && tab.title) || '';
+  const title = hint || (tab && tab.title) || '';
   let media;
   if (onlyMedia) {
     media = [stripMedia(onlyMedia)];
@@ -771,7 +771,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     case 'mrm-video-click': {
       const tabId = sender.tab ? sender.tab.id : -1;
       return respond(async () => {
-        const r = await sendVideo(tabId, { extraSrc: msg.src, frameUrl: sender.url || msg.frameUrl });
+        const r = await sendVideo(tabId, { extraSrc: msg.src, frameUrl: sender.url || msg.frameUrl, title: msg.title });
         return { ok: r.ok, error: r.error, message: resultMessage(r) };
       });
     }

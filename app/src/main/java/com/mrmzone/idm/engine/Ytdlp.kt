@@ -49,6 +49,34 @@ object Ytdlp {
         return r.ifEmpty { t.trim() }
     }
 
+    private val genericRe = Regex("""^(\(\d+\)\s*)?(facebook|instagram|tiktok|youtube|twitter|x|threads|video|videos|reel|reels|watch|facebook watch|facebook video|untitled|[\d.]+\s*\S*\s*views?)$|^(video|reel|post)s?\s+(by|from)\s""", RegexOption.IGNORE_CASE)
+
+    fun isGenericTitle(t: String?, uploader: String? = null): Boolean {
+        val s = t?.trim() ?: return true
+        return s.length < 2 || genericRe.containsMatchIn(s) || (!uploader.isNullOrBlank() && s.equals(uploader.trim(), true))
+    }
+
+    /** First real line of a caption: "গোপাল বুদ্ধি করে বেতন বাড়িয়ে নিল।" */
+    fun captionLine(desc: String?): String? {
+        if (desc.isNullOrBlank()) return null
+        for (raw in desc.replace("\r", "").split('\n')) {
+            val l = cleanTitle(raw).replace(Regex("https?://\\S+"), "").trim()
+            if (l.length >= 2 && l != "video" && !l.startsWith("#") && !Regex("^hashtags?\\W*$", RegexOption.IGNORE_CASE).matches(l))
+                return l.take(140).trim()
+        }
+        return null
+    }
+
+    /** Facebook often reports only "Facebook" / the page name as title → use the caption's first line. */
+    fun bestTitle(title: String?, description: String?, uploader: String?): String {
+        val t = cleanTitle(title)
+        val cap = captionLine(description)
+        if (cap != null && (isGenericTitle(t, uploader) || t == "video")) return cap
+        if (cap != null && t.endsWith("...") && cap.startsWith(t.trimEnd('.', ' ', '…'))) return cap
+        if (isGenericTitle(t, uploader) && !uploader.isNullOrBlank()) return uploader.trim()
+        return t
+    }
+
     fun isVideoSite(url: String?): Boolean {
         val host = runCatching { URL(url).host.lowercase() }.getOrNull() ?: return false
         return videoHosts.any { host == it || host.endsWith(".$it") }
@@ -252,7 +280,7 @@ object Ytdlp {
             out += Quality("MP3", "Audio only (MP3)", "ba/b", "mp3", "mp3", -1, true)
         }
         val result = Info(
-            title = cleanTitle(info.title ?: info.fulltitle),
+            title = bestTitle(info.title ?: info.fulltitle, info.description, info.uploader),
             thumbnail = info.thumbnail,
             duration = info.duration,
             uploader = info.uploader,

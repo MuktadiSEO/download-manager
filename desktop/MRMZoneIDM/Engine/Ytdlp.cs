@@ -42,6 +42,42 @@ public static class Ytdlp
         return r.Length == 0 ? t.Trim() : r;
     }
 
+    static readonly Regex GenericRe = new(@"^(\(\d+\)\s*)?(facebook|instagram|tiktok|youtube|twitter|x|threads|video|videos|reel|reels|watch|facebook watch|facebook video|untitled|[\d.]+\s*\S*\s*views?)$|^(video|reel|post)s?\s+(by|from)\s", RegexOptions.IgnoreCase);
+
+    /// <summary>True for placeholder titles like "Facebook", "Video by Page", "Reels".</summary>
+    public static bool IsGenericTitle(string t, string uploader = null)
+    {
+        if (string.IsNullOrWhiteSpace(t)) return true;
+        t = t.Trim();
+        return t.Length < 2 || GenericRe.IsMatch(t) || (!string.IsNullOrEmpty(uploader) && string.Equals(t, uploader.Trim(), StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>First real line of a post caption / description: "গোপাল বুদ্ধি করে বেতন বাড়িয়ে নিল।".</summary>
+    public static string CaptionLine(string desc)
+    {
+        if (string.IsNullOrWhiteSpace(desc)) return null;
+        foreach (var raw in desc.Replace("\r", "").Split('\n'))
+        {
+            var l = CleanTitle(raw);
+            l = Regex.Replace(l, @"https?://\S+", "").Trim();
+            if (l.Length >= 2 && l != "video" && !l.StartsWith("#") && !Regex.IsMatch(l, @"^hashtags?\W*$", RegexOptions.IgnoreCase))
+                return l.Length > 140 ? l[..140].TrimEnd() : l;
+        }
+        return null;
+    }
+
+    /// <summary>Best human title: yt-dlp title, else the caption's first line (Facebook often reports just "Facebook").</summary>
+    public static string BestTitle(string title, string description, string uploader)
+    {
+        var t = CleanTitle(title);
+        var cap = CaptionLine(description);
+        if (cap != null && (IsGenericTitle(t, uploader) || t == "video")) return cap;
+        // truncated title ("Gopal ... বেতন বাড়ি...") → use the full caption line it came from
+        if (cap != null && t.EndsWith("...") && cap.StartsWith(t.TrimEnd('.', ' ', '…'))) return cap;
+        if (IsGenericTitle(t, uploader) && !string.IsNullOrEmpty(uploader)) return uploader.Trim();
+        return t;
+    }
+
     public static bool IsVideoSite(string url)
     {
         try { var h = new Uri(url).Host.ToLowerInvariant(); return VideoHosts.Any(v => h == v || h.EndsWith("." + v)); } catch { return false; }
@@ -173,7 +209,7 @@ public static class Ytdlp
         var bestM4a = audios.Where(x => x.Ext == "m4a").OrderByDescending(x => Math.Max(x.Abr, x.Tbr)).FirstOrDefault();
         var bestWebmA = audios.Where(x => x.Ext == "webm").OrderByDescending(x => Math.Max(x.Abr, x.Tbr)).FirstOrDefault();
         var bestAudio = audios.OrderByDescending(x => Math.Max(x.Abr, x.Tbr)).FirstOrDefault();
-        var info = new VideoInfo { Title = CleanTitle(S(r, "title") ?? S(r, "fulltitle") ?? "video"), Thumbnail = S(r, "thumbnail"), Uploader = S(r, "uploader"), Duration = dur, PageUrl = S(r, "webpage_url") ?? url };
+        var info = new VideoInfo { Title = BestTitle(S(r, "title") ?? S(r, "fulltitle"), S(r, "description"), S(r, "uploader") ?? S(r, "channel")), Thumbnail = S(r, "thumbnail"), Uploader = S(r, "uploader"), Duration = dur, PageUrl = S(r, "webpage_url") ?? url };
 
         foreach (var g in list.Where(x => x.IsVideo).GroupBy(x => x.Height).OrderByDescending(g => g.Key))
         {

@@ -110,6 +110,9 @@ public class VideoForm : Form
             if (IsDisposed) return;
             bar.Style = ProgressBarStyle.Marquee; status.Text = "Finding all qualities…";
             var info = await Task.Run(() => Ytdlp.Fetch(target, tRef, tCookies, ua, cts.Token));
+            // Facebook etc.: yt-dlp only knew the uploader / "Facebook" → use the caption the extension read from the page
+            if (info != null && !string.IsNullOrWhiteSpace(title) && (Ytdlp.IsGenericTitle(info.Title) || string.Equals(info.Title, info.Uploader, StringComparison.OrdinalIgnoreCase)) && !Ytdlp.IsGenericTitle(title))
+                info.Title = title;
             if (IsDisposed) return;
             bar.Visible = false;
             ShowInfo(info, target, tRef, tCookies);
