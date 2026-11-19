@@ -54,33 +54,41 @@
     :host { all: initial; }
     .wrap {
       display: inline-flex; align-items: center; gap: 4px;
-      font-family: "Segoe UI", Tahoma, Arial, sans-serif; font-size: 13px; line-height: 1;
-      user-select: none; -webkit-user-select: none;
-      filter: drop-shadow(0 2px 6px rgba(0,0,0,.35));
+      font-family: "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
+      line-height: 1; user-select: none; -webkit-user-select: none;
+      opacity: .88; transition: opacity .2s ease;
     }
+    .wrap:hover { opacity: 1; }
     .btn {
       all: unset; box-sizing: border-box; cursor: pointer;
-      display: inline-flex; align-items: center; gap: 7px;
-      height: 30px; padding: 0 12px 0 6px; border-radius: 15px;
-      background: #FF6347; color: #fff; font-weight: 700; font-size: 13px;
-      white-space: nowrap; transition: background .15s, transform .1s;
+      display: inline-flex; align-items: center; gap: 6px;
+      height: 26px; padding: 0 11px 0 4px; border-radius: 13px;
+      background: rgba(18, 20, 24, .72);
+      -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, .14);
+      box-shadow: 0 2px 10px rgba(0, 0, 0, .28);
+      color: #fff; font-size: 12px; font-weight: 600; letter-spacing: .1px;
+      white-space: nowrap; transition: background .15s ease, border-color .15s ease, transform .1s ease;
     }
-    .btn:hover { background: #ff4b2b; }
+    .btn:hover { background: rgba(18, 20, 24, .9); border-color: rgba(255, 99, 71, .7); }
     .btn:active { transform: scale(.97); }
-    .btn[disabled] { opacity: .75; cursor: progress; }
-    .logo {
+    .btn[disabled] { opacity: .7; cursor: progress; }
+    .ico {
+      width: 18px; height: 18px; border-radius: 50%;
       display: inline-flex; align-items: center; justify-content: center;
-      height: 20px; padding: 0 5px; border-radius: 10px;
-      background: #2B2F36; color: #fff; font-size: 9px; font-weight: 800; letter-spacing: .5px;
+      background: #FF6347; color: #fff; flex: none;
     }
-    .arrow { font-size: 14px; }
+    .ico svg { width: 12px; height: 12px; display: block; }
     .close {
       all: unset; box-sizing: border-box; cursor: pointer;
-      width: 20px; height: 20px; border-radius: 10px;
+      width: 18px; height: 18px; border-radius: 50%;
       display: inline-flex; align-items: center; justify-content: center;
-      background: rgba(43,47,54,.85); color: #fff; font-size: 14px; font-weight: 700;
+      background: rgba(18, 20, 24, .72); border: 1px solid rgba(255, 255, 255, .14);
+      color: rgba(255, 255, 255, .85); font-size: 12px; line-height: 1;
+      opacity: 0; transition: opacity .15s ease;
     }
-    .close:hover { background: #2B2F36; }
+    .wrap:hover .close { opacity: 1; }
+    .close:hover { background: rgba(18, 20, 24, .95); color: #fff; }
   `;
 
   function createPanel(video) {
@@ -95,8 +103,8 @@
     root.innerHTML = `
       <style>${PANEL_CSS}</style>
       <div class="wrap">
-        <button class="btn" type="button" title="Download this video with MRM Zone IDM">
-          <span class="logo">MRM</span><span class="arrow">⬇</span><span class="label">Download this video</span>
+        <button class="btn" type="button" title="Download this video with MRM Zone IDM (all qualities)">
+          <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5.5 19.5h13" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="label">Download video</span>
         </button>
         <button class="close" type="button" title="Hide">×</button>
       </div>`;
@@ -199,8 +207,10 @@
     attachHost(host, video);
     host.style.setProperty('display', 'block', 'important');
     const w = host.offsetWidth || 200;
-    const top = Math.max(r.top, 0) + 8;
-    const right = Math.min(r.right, vw) - 8;
+    // tucked into the video's top-right corner
+    const inset = r.width > 640 ? 12 : 8;
+    const top = Math.max(r.top, 0) + inset;
+    const right = Math.min(r.right, vw) - inset;
     const left = Math.max(Math.max(r.left, 0) + 4, right - w);
     host.style.setProperty('top', `${Math.round(top)}px`, 'important');
     host.style.setProperty('left', `${Math.round(left)}px`, 'important');
