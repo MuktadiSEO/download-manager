@@ -18,6 +18,7 @@ import com.google.android.material.progressindicator.LinearProgressIndicator
 import com.mrmzone.idm.R
 import com.mrmzone.idm.data.Status
 import com.mrmzone.idm.engine.DM
+import com.mrmzone.idm.engine.FileStore
 import com.mrmzone.idm.util.Fmt
 
 /** IDM-like "download progress" window with per-connection details. */
@@ -109,7 +110,7 @@ class ProgressActivity : AppCompatActivity() {
         values["Time left"]?.text = if (d.status == Status.DOWNLOADING) Fmt.time(d.timeLeftSec) else "-"
         values["Resume capability"]?.text = if (d.resumable) "Yes" else if (d.totalSize < 0 && d.downloaded == 0L) "Unknown" else "No"
         values["Connections"]?.text = "${d.activeConnections} active / ${d.connections} max"
-        values["Save to"]?.text = "Download/MRM Zone/${d.category.folder}"
+        values["Save to"]?.text = FileStore.folderLabel(d.saveDir, d.category)
         progress.isIndeterminate = d.status == Status.CONNECTING || (d.status == Status.DOWNLOADING && d.totalSize <= 0)
         progress.progress = d.progress
         btnPause.text = if (d.status.isActive) "Pause" else "Resume"

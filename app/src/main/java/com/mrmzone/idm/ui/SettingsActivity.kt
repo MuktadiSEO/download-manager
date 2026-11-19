@@ -12,6 +12,8 @@ import com.mrmzone.idm.engine.DM
 import com.mrmzone.idm.engine.FileStore
 
 class SettingsActivity : AppCompatActivity() {
+    private var folderChanged: () -> Unit = {}
+    private val folder = SaveFolder(this) { folderChanged() }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val p = DM.prefs
@@ -75,7 +77,14 @@ class SettingsActivity : AppCompatActivity() {
         f.note("The engine updates itself automatically once a day so YouTube downloads keep working.")
 
         f.header("SAVE LOCATION")
-        f.note("Files are sorted automatically into:\nDownload/${FileStore.ROOT}/Video, Music, Documents, Compressed, Programs, Images, General")
+        val loc = f.note("")
+        fun showLoc() {
+            loc.text = if (DM.prefs.saveTree == null) "Files are sorted automatically into:\nDownload/${FileStore.ROOT}/Video, Music, Documents, Compressed, Programs, Images, General"
+                       else "All downloads are saved to:\n${FileStore.folderLabel(DM.prefs.saveTree, com.mrmzone.idm.data.Category.OTHER)}"
+        }
+        showLoc()
+        f.add(MaterialButton(this).apply { text = "Change download folder"; setOnClickListener { folder.change(com.mrmzone.idm.data.Category.OTHER) } })
+        folderChanged = { showLoc() }
         f.show()
     }
 }

@@ -11,8 +11,8 @@ android {
         applicationId = "com.mrmzone.idm"
         minSdk = 24
         targetSdk = 34
-        versionCode = 13
-        versionName = "1.6.1"
+        versionCode = 14
+        versionName = "1.7.0"
     }
 
     buildTypes {

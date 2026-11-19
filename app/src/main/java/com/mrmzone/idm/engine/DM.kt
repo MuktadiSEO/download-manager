@@ -50,6 +50,7 @@ object DM {
     fun totalSpeed() = tasks.values.sumOf { it.item.speed }
 
     fun add(item: DownloadItem, startNow: Boolean): DownloadItem {
+        if (item.saveDir == null) item.saveDir = prefs.saveTree
         item.status = if (startNow) Status.WAITING else if (item.inQueue) Status.QUEUED else Status.PAUSED
         db.insert(item)
         synchronized(items) { items.add(0, item) }

@@ -17,6 +17,8 @@ class Prefs(ctx: Context) {
     var vibrateOnComplete: Boolean get() = sp.getBoolean("vibrate", true); set(v) = sp.edit().putBoolean("vibrate", v).apply()
     var autoResume: Boolean get() = sp.getBoolean("auto_resume", true); set(v) = sp.edit().putBoolean("auto_resume", v).apply()
     var userAgent: String get() = sp.getString("ua", DEFAULT_UA)!!; set(v) = sp.edit().putString("ua", v).apply()
+    /** default download folder chosen by the user (SAF tree uri); null = Download/MRM Zone/<category> */
+    var saveTree: String? get() = sp.getString("save_tree", null); set(v) = sp.edit().putString("save_tree", v).apply()
     var lastClip: String? get() = sp.getString("last_clip", null); set(v) = sp.edit().putString("last_clip", v).apply()
     var homePage: String get() = sp.getString("home", "https://www.google.com")!!; set(v) = sp.edit().putString("home", v).apply()
     var darkTheme: Int get() = sp.getInt("theme", 2); set(v) = sp.edit().putInt("theme", v).apply() // 0 light 1 dark 2 system

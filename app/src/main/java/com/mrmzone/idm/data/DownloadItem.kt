@@ -49,6 +49,8 @@ data class DownloadItem(
     var formatSpec: String? = null,
     /** yt-dlp extra: merge container ("mp4"/"webm"/"mkv") or "mp3" for audio extraction */
     var extra: String? = null,
+    /** folder chosen by the user (SAF tree uri); null = Download/MRM Zone/<category> */
+    var saveDir: String? = null,
 ) {
     val isYtdlp get() = kind == "ytdlp"
 

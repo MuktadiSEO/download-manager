@@ -90,7 +90,7 @@ object Dialogs {
                 appendLine("Status: ${d.status.name.lowercase()}" + (d.error?.let { " ($it)" } ?: ""))
                 appendLine("Resume support: ${if (d.resumable) "Yes" else "No"}")
                 appendLine("Connections: ${d.connections}")
-                appendLine("Saved to: Download/${FileStore.ROOT}/${d.category.folder}")
+                appendLine("Saved to: ${FileStore.folderLabel(d.saveDir, d.category)}")
                 appendLine("Added: ${Fmt.date(d.createdAt)}")
                 appendLine("Last try: ${Fmt.date(d.lastTry)}")
                 if (done) appendLine("Completed: ${Fmt.date(d.finishedAt)}")

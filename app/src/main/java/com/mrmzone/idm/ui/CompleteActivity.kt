@@ -28,7 +28,7 @@ class CompleteActivity : AppCompatActivity() {
         fun line(k: String, v: String) = root.addView(TextView(this).apply { text = "$k: $v"; textSize = 14f; setPadding(0, p / 3, 0, 0) })
         line("File", d.fileName)
         line("Size", Fmt.size(d.totalSize))
-        line("Saved to", "Download/${FileStore.ROOT}/${d.category.folder}")
+        line("Saved to", FileStore.folderLabel(d.saveDir, d.category))
         line("Address", d.url)
         val cb = CheckBox(this).apply { text = "Don't show this dialog again"; setPadding(0, p / 2, 0, 0) }
         root.addView(cb)

@@ -39,6 +39,7 @@ class QuickDownloadActivity : AppCompatActivity() {
     private var nameEdited = false
     private var referer: String? = null
     private var cookies: String? = null
+    private val folder = SaveFolder(this) { setCategory(cat) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -70,6 +71,8 @@ class QuickDownloadActivity : AppCompatActivity() {
         row.addView(status, LinearLayout.LayoutParams(0, -2, 1f))
         root.addView(row)
         saveTo = TextView(this).apply { textSize = 12f; setTextColor(ContextCompat.getColor(context, R.color.text_secondary)); setPadding(0, p / 3, 0, 0) }
+        saveTo.setOnClickListener { folder.change(cat) }
+        saveTo.setPadding(0, p / 2, 0, p / 3)
         root.addView(saveTo)
         setCategory(Category.fromFileName(name.text.toString()))
 
@@ -103,7 +106,12 @@ class QuickDownloadActivity : AppCompatActivity() {
         probe()
     }
 
-    private fun setCategory(c: Category) { cat = c; saveTo.text = "Save to: Download/MRM Zone/${c.folder}" }
+    private fun setCategory(c: Category) {
+        cat = c
+        saveTo.text = android.text.SpannableStringBuilder("Save to: ${folder.label(c)}   ").append("Change",
+            android.text.style.ForegroundColorSpan(ContextCompat.getColor(this, R.color.brand_blue)), 0)
+            .also { it.setSpan(android.text.style.StyleSpan(Typeface.BOLD), it.length - 6, it.length, 0) }
+    }
 
     private fun probe() {
         Thread {

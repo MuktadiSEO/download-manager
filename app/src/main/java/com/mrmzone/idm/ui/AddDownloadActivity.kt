@@ -46,6 +46,7 @@ class AddDownloadActivity : AppCompatActivity() {
     private var cookies: String? = null
     private val h = Handler(Looper.getMainLooper())
     private var probeSeq = 0
+    private val folder = SaveFolder(this) { updateSaveTo() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -74,6 +75,7 @@ class AddDownloadActivity : AppCompatActivity() {
         setContentView(R.layout.activity_add)
         url = findViewById(R.id.url); name = findViewById(R.id.name); cat = findViewById(R.id.category)
         info = findViewById(R.id.probeInfo); probing = findViewById(R.id.probing); saveTo = findViewById(R.id.saveTo)
+        saveTo.setOnClickListener { folder.change(selCat) }
         val conn = findViewById<Slider>(R.id.conn)
         val connLabel = findViewById<TextView>(R.id.connLabel)
         conn.value = DM.prefs.maxConnections.coerceIn(1, 32).toFloat()
@@ -145,7 +147,11 @@ class AddDownloadActivity : AppCompatActivity() {
     }
 
     private fun setCategory(c: Category) { selCat = c; cat.setText(c.label, false); updateSaveTo() }
-    private fun updateSaveTo() { saveTo.text = "Save to: Download/${FileStore.ROOT}/${selCat.folder}" }
+    private fun updateSaveTo() {
+        saveTo.text = android.text.SpannableStringBuilder("Save to: ${folder.label(selCat)}   ").append("Change",
+            android.text.style.ForegroundColorSpan(androidx.core.content.ContextCompat.getColor(this, R.color.brand_blue)), 0)
+            .also { it.setSpan(android.text.style.StyleSpan(android.graphics.Typeface.BOLD), it.length - 6, it.length, 0) }
+    }
 
     private fun openVideoPicker(u: String, fallback: Boolean) {
         startActivity(Intent(this, VideoQualityActivity::class.java).putExtra("url", u).putExtra("fallback", fallback))
