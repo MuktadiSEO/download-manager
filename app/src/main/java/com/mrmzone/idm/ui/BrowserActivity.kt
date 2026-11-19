@@ -46,6 +46,7 @@ import com.mrmzone.idm.engine.DM
 import com.mrmzone.idm.engine.Http
 import com.mrmzone.idm.engine.Ytdlp
 import org.json.JSONArray
+import org.json.JSONObject
 import org.json.JSONTokener
 
 /**
@@ -61,6 +62,7 @@ class BrowserActivity : AppCompatActivity() {
         var files: List<String> = emptyList()
         var desktop = false
         var pendingUrl: String? = null          // restored tab, loaded when first shown
+        var group = 0                           // tab group id (0 = not in a group), like Chrome
         @Volatile var pageUrl: String? = null
         @Volatile var adOn = true
         @Volatile var blocked = 0
@@ -70,6 +72,8 @@ class BrowserActivity : AppCompatActivity() {
 
     private val tabs = mutableListOf<Tab>()
     private var cur = -1
+    private lateinit var groupScroll: android.widget.HorizontalScrollView
+    private lateinit var groupBar: LinearLayout
     private val tab get() = tabs[cur]
     private lateinit var address: EditText
     private lateinit var content: FrameLayout
@@ -129,6 +133,13 @@ class BrowserActivity : AppCompatActivity() {
         })
         root.addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
 
+        // ---- tab group strip (shown when the current tab is in a group), like Chrome's bottom group bar
+        groupBar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding((6 * dp).toInt(), 0, (6 * dp).toInt(), 0) }
+        groupScroll = android.widget.HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false; setBackgroundColor(barColor); visibility = View.GONE; addView(groupBar)
+        }
+        root.addView(groupScroll, LinearLayout.LayoutParams(-1, (44 * dp).toInt()))
+
         // ---- bottom: back, forward, home, tabs, downloads, menu
         val bottom = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setBackgroundColor(barColor); gravity = Gravity.CENTER }
         fun slot(v: View) = bottom.addView(v, LinearLayout.LayoutParams(0, (52 * dp).toInt(), 1f))
@@ -173,7 +184,7 @@ class BrowserActivity : AppCompatActivity() {
     // ---------------- saved tabs ----------------
     private fun saveTabs() {
         val arr = JSONArray()
-        tabs.forEach { arr.put(it.url ?: DM.prefs.homePage) }
+        tabs.forEach { arr.put(JSONObject().put("u", it.url ?: DM.prefs.homePage).put("g", it.group)) }
         DM.prefs.savedTabs = arr.toString()
         DM.prefs.savedTabCur = cur.coerceAtLeast(0)
     }
@@ -182,7 +193,9 @@ class BrowserActivity : AppCompatActivity() {
         val arr = runCatching { JSONArray(DM.prefs.savedTabs ?: return) }.getOrNull() ?: return
         for (i in 0 until arr.length()) {
             val t = createWebView()
-            t.pendingUrl = arr.optString(i).ifBlank { DM.prefs.homePage }
+            val o = arr.optJSONObject(i)
+            t.pendingUrl = (o?.optString("u") ?: arr.optString(i)).ifBlank { DM.prefs.homePage }
+            t.group = o?.optInt("g") ?: 0
             tabs.add(t)
         }
         if (tabs.isNotEmpty()) switchTo(DM.prefs.savedTabCur.coerceIn(0, tabs.size - 1))
@@ -324,7 +337,7 @@ class BrowserActivity : AppCompatActivity() {
                 t.adOn = AdBlock.enabledFor(DM.prefs, url)
                 if (view == tab.web) { address.setText(url); updateFab(); updateShield() }
             }
-            override fun onPageFinished(view: WebView, url: String) { scan(t) }
+            override fun onPageFinished(view: WebView, url: String) { scan(t); if (t.group != 0 && cur in tabs.indices && tab.group == t.group) updateGroupBar() }
             override fun doUpdateVisitedHistory(view: WebView, url: String, isReload: Boolean) {
                 // single-page sites (YouTube) change URL without reloading
                 t.pageUrl = url
@@ -370,12 +383,15 @@ class BrowserActivity : AppCompatActivity() {
             if (link != null && link.startsWith("http") && (r.type == WebView.HitTestResult.SRC_ANCHOR_TYPE ||
                     r.type == WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE || r.type == WebView.HitTestResult.IMAGE_TYPE)) {
                 MaterialAlertDialogBuilder(this).setTitle(link.take(120))
-                    .setItems(arrayOf("Download with MRM Zone IDM", "Open in new tab", "Open", "Copy link")) { _, w ->
+                    .setItems(arrayOf("Download with MRM Zone IDM", "Open in new tab", "Open in new tab in background",
+                        "Open in new tab in group", "Open", "Copy link")) { _, w ->
                         when (w) {
                             0 -> if (Ytdlp.isVideoSite(link)) openPicker(link) else startAdd(link, null, t)
                             1 -> newTab(link)
-                            2 -> web.loadUrl(link)
-                            3 -> copy(link)
+                            2 -> backgroundTab(link, inGroup = false)
+                            3 -> backgroundTab(link, inGroup = true)
+                            4 -> web.loadUrl(link)
+                            5 -> copy(link)
                         }
                     }.show()
                 true
@@ -407,6 +423,69 @@ class BrowserActivity : AppCompatActivity() {
         updateShield()
         tabCount.text = tabs.size.toString()
         updateFab()
+        updateGroupBar()
+    }
+
+    /** Opens a link in a new tab behind the current one (optionally in the current tab's group). */
+    private fun backgroundTab(url: String, inGroup: Boolean) {
+        val t = createWebView()
+        var at = cur + 1
+        if (inGroup) {
+            if (tab.group == 0) tab.group = (tabs.maxOfOrNull { it.group } ?: 0) + 1
+            t.group = tab.group
+            at = tabs.indexOfLast { it.group == tab.group } + 1       // after the group's last tab
+        } else {
+            // Chrome puts background tabs next to their opener (after earlier ones it opened)
+            while (at < tabs.size && tabs[at].group != 0 && tabs[at].group == tab.group) at++
+        }
+        tabs.add(at, t)
+        if (at <= cur) cur++
+        load(t, url)                                                  // loads in the background
+        tabCount.text = tabs.size.toString()
+        updateGroupBar(); saveTabs()
+        com.google.android.material.snackbar.Snackbar.make(content, if (inGroup) "Tab opened in group" else "Tab opened in background",
+            com.google.android.material.snackbar.Snackbar.LENGTH_SHORT)
+            .setAction("Switch") { tabs.indexOf(t).takeIf { it >= 0 }?.let { switchTo(it); saveTabs() } }.show()
+    }
+
+    private val groupColors = intArrayOf(0xFF4285F4.toInt(), 0xFFEA4335.toInt(), 0xFFFBBC04.toInt(), 0xFF34A853.toInt(), 0xFFA142F4.toInt(), 0xFF24C1E0.toInt(), 0xFFF538A0.toInt())
+    private fun groupColor(g: Int) = groupColors[(g - 1).mod(groupColors.size)]
+
+    /** Strip of the current group's tabs (tap to switch, + adds a tab to the group). */
+    private fun updateGroupBar() {
+        if (cur !in tabs.indices) return
+        val g = tab.group
+        val members = if (g == 0) emptyList() else tabs.withIndex().filter { it.value.group == g }
+        if (members.size < 2) { groupScroll.visibility = View.GONE; if (g != 0 && members.size < 2) tab.group = 0; return }
+        groupScroll.visibility = View.VISIBLE
+        groupBar.removeAllViews()
+        val color = groupColor(g)
+        groupBar.addView(View(this).apply { background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(color) } },
+            LinearLayout.LayoutParams((10 * dp).toInt(), (10 * dp).toInt()).apply { marginEnd = (8 * dp).toInt() })
+        members.forEach { (i, t) ->
+            val chip = TextView(this).apply {
+                text = (t.web.title?.ifBlank { null } ?: t.url?.substringAfter("://")?.substringBefore('/') ?: "New tab").take(18)
+                textSize = 12f; maxLines = 1; gravity = Gravity.CENTER
+                setTextColor(if (i == cur) 0xFF000000.toInt() else 0xFFFFFFFF.toInt())
+                setPadding((12 * dp).toInt(), (6 * dp).toInt(), (12 * dp).toInt(), (6 * dp).toInt())
+                background = GradientDrawable().apply {
+                    cornerRadius = 14 * dp
+                    if (i == cur) setColor(0xFFFFFFFF.toInt()) else { setColor(0x00000000); setStroke((1.5f * dp).toInt(), color) }
+                }
+                setOnClickListener { if (i != cur) { switchTo(i); saveTabs() } }
+            }
+            groupBar.addView(chip, LinearLayout.LayoutParams(-2, -2).apply { marginEnd = (6 * dp).toInt() })
+        }
+        groupBar.addView(TextView(this).apply {
+            text = "+"; textSize = 20f; setTextColor(0xFFFFFFFF.toInt()); setPadding((10 * dp).toInt(), 0, (10 * dp).toInt(), 0)
+            contentDescription = "New tab in group"
+            setOnClickListener {
+                val t = createWebView(); t.group = g
+                val at = tabs.indexOfLast { it.group == g } + 1
+                tabs.add(at, t); if (at <= cur) cur++
+                switchTo(at); load(t, DM.prefs.homePage); saveTabs()
+            }
+        })
     }
 
     private fun closeTab(i: Int) {
@@ -417,7 +496,7 @@ class BrowserActivity : AppCompatActivity() {
         t.web.destroy()
         if (tabs.isEmpty()) { cur = -1; newTab(DM.prefs.homePage); return }
         if (wasCurrent) { cur = -1; switchTo(minOf(i, tabs.size - 1)) }
-        else { if (i < cur) cur--; tabCount.text = tabs.size.toString(); updateFab() }
+        else { if (i < cur) cur--; tabCount.text = tabs.size.toString(); updateFab(); updateGroupBar() }
         saveTabs()
     }
 
@@ -434,6 +513,9 @@ class BrowserActivity : AppCompatActivity() {
                 }
                 setOnClickListener { switchTo(i); dlg?.dismiss() }
             }
+            if (t.group != 0) row.addView(View(this).apply {
+                background = GradientDrawable().apply { cornerRadius = 3 * dp; setColor(groupColor(t.group)) }
+            }, LinearLayout.LayoutParams((5 * dp).toInt(), (34 * dp).toInt()).apply { marginEnd = (8 * dp).toInt() })
             val txt = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
             txt.addView(TextView(this).apply { text = t.web.title?.ifBlank { null } ?: t.url ?: "New tab"; textSize = 15f; maxLines = 1; setTypeface(typeface, Typeface.BOLD) })
             txt.addView(TextView(this).apply { text = t.url.orEmpty(); textSize = 12f; maxLines = 1; setTextColor(ContextCompat.getColor(context, R.color.text_secondary)) })
