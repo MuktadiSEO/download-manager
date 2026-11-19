@@ -22,7 +22,8 @@
         <com.google.android.material.progressindicator.LinearProgressIndicator
             android:id="@+id/progress" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="12dp" android:max="100"
-            app:trackThickness="10dp" app:trackCornerRadius="5dp" />
+            app:trackThickness="10dp" app:trackCornerRadius="0dp"
+            app:indicatorTrackGapSize="0dp" app:trackStopIndicatorSize="0dp" />
 
         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
             android:layout_marginTop="12dp" android:text="Start positions and download progress by connections"
@@ -30,8 +31,12 @@
         <com.mrmzone.idm.ui.SegmentBarView android:id="@+id/segments"
             android:layout_width="match_parent" android:layout_height="22dp" android:layout_marginTop="4dp" />
 
+        <TextView android:id="@+id/detailsToggle" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:layout_marginTop="6dp" android:paddingTop="6dp" android:paddingBottom="6dp" android:paddingEnd="12dp"
+            android:text="Details ▾" android:textSize="13sp" android:textStyle="bold" android:textColor="@color/brand_blue"
+            android:background="?attr/selectableItemBackground" />
         <LinearLayout android:id="@+id/connections" android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:orientation="vertical" android:layout_marginTop="8dp" />
+            android:orientation="vertical" android:layout_marginTop="2dp" android:visibility="gone" />
 
         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
             android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginTop="8dp">

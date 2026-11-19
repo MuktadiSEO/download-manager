@@ -46,8 +46,12 @@ public class ProgressForm : Form
         Controls.Add(new Label { Text = "Start positions and download progress by connections", AutoSize = true, ForeColor = Theme.Gray, Location = new Point(20, y) }); y += 20;
         seg.Location = new Point(20, y); Controls.Add(seg); y += 30;
         conns.Columns.Add("N.", Theme.S(40)); conns.Columns.Add("Downloaded", Theme.S(120)); conns.Columns.Add("Info", Theme.S(380));
-        conns.Location = new Point(20, y); Controls.Add(conns);
+        // per-connection list: hidden until "Details" is clicked
+        var details = new LinkLabel { Text = "Details ▾", AutoSize = true, Location = new Point(20, y - 2), LinkBehavior = LinkBehavior.HoverUnderline, LinkColor = Theme.Blue, ActiveLinkColor = Theme.Blue, Font = Theme.Bold };
+        Controls.Add(details); y += 24;
+        conns.Location = new Point(20, y); Controls.Add(conns); conns.Visible = false;
         try { typeof(Control).GetProperty("DoubleBuffered", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.SetValue(conns, true); } catch { } y += 140;
+        int belowFrom = Controls.Count;
         limit.Location = new Point(20, y + 6); limitVal.Location = new Point(160, y + 3);
         Controls.Add(limit); Controls.Add(limitVal); Controls.Add(new Label { Text = "KB/sec", AutoSize = true, Location = new Point(256, y + 7) });
         var cbDone = new CheckBox { Text = "Show download complete dialog", AutoSize = true, Location = new Point(330, y + 6), Checked = App.Settings.ShowCompleteDialog };
@@ -70,6 +74,15 @@ public class ProgressForm : Form
         limit.CheckedChanged += (_, _) => ApplyLimit(); limitVal.ValueChanged += (_, _) => { if (limit.Checked) ApplyLimit(); };
         t.Tick += (_, _) => Render();
         t.Start(); Render();
+        var below = Controls.Cast<Control>().Skip(belowFrom).ToList();
+        void Shift(int dy) { SuspendLayout(); foreach (var c in below) c.Top += dy; ClientSize = new Size(ClientSize.Width, ClientSize.Height + dy); ResumeLayout(); }
+        details.LinkClicked += (_, _) =>
+        {
+            int h = conns.Height + Theme.S(10);
+            if (conns.Visible) { conns.Visible = false; Shift(-h); details.Text = "Details ▾"; }
+            else { Shift(h); conns.Visible = true; details.Text = "Details ▴"; Render(); }
+        };
+        Load += (_, _) => Shift(-(conns.Height + Theme.S(10)));   // start collapsed (after DPI scaling)
         FormClosed += (_, _) => { t.Stop(); t.Dispose(); if (Open.TryGetValue(id, out var o) && o == this) Open.Remove(id); };
         Theme.Fit(this);
     }
@@ -104,6 +117,7 @@ public class ProgressForm : Form
         pause.Text = d.Status.IsActive() ? "Pause" : "Resume";
         var segs = d.LiveSegments.Count > 0 ? d.LiveSegments : d.Segments ?? new();
         seg.Set(segs, d.TotalSize, d.IsYtdlp ? d.Progress : -1);
+        if (!conns.Visible) return;
         bool rebuild = conns.Items.Count != segs.Count;
         if (rebuild) conns.BeginUpdate();
         while (conns.Items.Count < segs.Count) conns.Items.Add(new ListViewItem(new[] { "", "", "" }));

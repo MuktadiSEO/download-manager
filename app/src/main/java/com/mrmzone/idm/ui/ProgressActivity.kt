@@ -39,6 +39,14 @@ class ProgressActivity : AppCompatActivity() {
         title = findViewById(R.id.title); percent = findViewById(R.id.percent)
         progress = findViewById(R.id.progress); segBar = findViewById(R.id.segments)
         conns = findViewById(R.id.connections); btnPause = findViewById(R.id.btnPause)
+        // per-connection list is hidden until "Details" is tapped
+        findViewById<TextView>(R.id.detailsToggle).let { t ->
+            t.setOnClickListener {
+                val show = conns.visibility != android.view.View.VISIBLE
+                conns.visibility = if (show) android.view.View.VISIBLE else android.view.View.GONE
+                t.text = if (show) "Details ▴" else "Details ▾"
+            }
+        }
         val table = findViewById<TableLayout>(R.id.table)
         for (k in listOf("URL", "Status", "File size", "Downloaded", "Transfer rate", "Time left", "Resume capability", "Connections", "Save to")) {
             val row = TableRow(this)
@@ -108,6 +116,7 @@ class ProgressActivity : AppCompatActivity() {
 
         val segs = d.liveSegments.ifEmpty { com.mrmzone.idm.data.Segment.parseList(d.segments) }
         segBar.set(segs, d.totalSize, false)
+        if (conns.visibility != android.view.View.VISIBLE) return
         conns.removeAllViews()
         segs.forEachIndexed { i, s ->
             val st = when { s.finished -> "Done"; d.status == Status.DOWNLOADING && s.done >= 0 -> "Receiving data…"; else -> "Idle" }
