@@ -37,12 +37,14 @@ class VideoQualityActivity : AppCompatActivity() {
     private lateinit var spinner: ProgressBar
     private var url = ""
     private var fallbackBrowser = false
+    private var popup = false
     private val dp by lazy { resources.displayMetrics.density }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         url = intent.getStringExtra("url").orEmpty()
         fallbackBrowser = intent.getBooleanExtra("fallback", false)
+        popup = intent.getBooleanExtra("popup", false)
         val p = (18 * dp).toInt()
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(p, p, p, p / 2) }
         val head = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
@@ -62,7 +64,19 @@ class VideoQualityActivity : AppCompatActivity() {
         val close = MaterialButton(this, null, com.google.android.material.R.attr.borderlessButtonStyle).apply { text = "Close"; setOnClickListener { finish() } }
         root.addView(close, LinearLayout.LayoutParams(-2, -2).apply { gravity = Gravity.END })
         setContentView(root)
-        window.setLayout((resources.displayMetrics.widthPixels * 0.94).toInt(), (resources.displayMetrics.heightPixels * 0.85).toInt())
+        if (popup) {
+            // bottom sheet over the app the link was shared from (Facebook, YouTube…)
+            val r = 22 * dp
+            window.setBackgroundDrawable(android.graphics.drawable.GradientDrawable().apply {
+                setColor(ContextCompat.getColor(this@VideoQualityActivity, R.color.surface))
+                cornerRadii = floatArrayOf(r, r, r, r, 0f, 0f, 0f, 0f)
+            })
+            window.setGravity(Gravity.BOTTOM)
+            window.setLayout(resources.displayMetrics.widthPixels, (resources.displayMetrics.heightPixels * 0.62).toInt())
+            window.setWindowAnimations(android.R.style.Animation_InputMethod)
+            setFinishOnTouchOutside(true)
+        } else
+            window.setLayout((resources.displayMetrics.widthPixels * 0.94).toInt(), (resources.displayMetrics.heightPixels * 0.85).toInt())
         load()
     }
 
@@ -186,8 +200,8 @@ class VideoQualityActivity : AppCompatActivity() {
             kind = "ytdlp", formatSpec = q.formatSpec, extra = q.extra,
         )
         DM.add(item, !queueOnly)
-        Toast.makeText(this, if (queueOnly) "Added to queue" else "Downloading ${q.label}…", Toast.LENGTH_SHORT).show()
-        if (!queueOnly && DM.prefs.showStartDialog) startActivity(Intent(this, ProgressActivity::class.java).putExtra("id", item.id))
+        Toast.makeText(this, if (queueOnly) "Added to queue" else if (popup) "MRM Zone IDM: downloading ${q.label} — see notification" else "Downloading ${q.label}…", Toast.LENGTH_SHORT).show()
+        if (!queueOnly && !popup && DM.prefs.showStartDialog) startActivity(Intent(this, ProgressActivity::class.java).putExtra("id", item.id))
         finish()
     }
 }

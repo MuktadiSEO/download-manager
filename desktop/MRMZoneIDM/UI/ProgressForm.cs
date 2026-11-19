@@ -30,10 +30,12 @@ public class ProgressForm : Form
         var d = Manager.Get(id);
         Text = (d?.Progress ?? 0) + "% " + d?.FileName; Icon = Theme.AppIcon; Font = Theme.UiFont; BackColor = Color.White;
         FormBorderStyle = FormBorderStyle.FixedSingle; MaximizeBox = false; StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(600, 560);
-        var tabsTitle = new Label { Text = "Download status", Font = Theme.Bold, AutoSize = true, Location = new Point(20, 12) };
-        Controls.Add(tabsTitle);
-        int y = 40;
+        ClientSize = new Size(600, 572);
+        // navy header band, so the top never blends into the white body
+        var band = new Panel { BackColor = Theme.Navy, Location = new Point(0, 0), Size = new Size(600, 40) };
+        band.Controls.Add(new Label { Text = "Download status", Font = new Font("Segoe UI Semibold", 10.5f), ForeColor = Color.White, AutoSize = true, Location = new Point(18, 10) });
+        Controls.Add(band);
+        int y = 52;
         foreach (var k in new[] { "File", "URL", "Status", "File size", "Downloaded", "Transfer rate", "Time left", "Resume capability", "Save to" })
         {
             Controls.Add(new Label { Text = k, AutoSize = true, ForeColor = Theme.Gray, Location = new Point(20, y) });
@@ -143,13 +145,11 @@ public class SmoothBar : Control
 
     protected override void OnPaint(PaintEventArgs e)
     {
-        var g = e.Graphics; g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-        var r = new Rectangle(0, 0, Width - 1, Height - 1);
-        int rad = Math.Max(2, Height / 2 - 1);
-        using (var bgPath = Theme.Rounded(r, rad))
-        using (var bg = new SolidBrush(Color.FromArgb(0xE6, 0xEA, 0xF0)))
-            g.FillPath(bg, bgPath);
-        g.SetClip(Theme.Rounded(r, rad));
+        // square corners, thin border (IDM style)
+        var g = e.Graphics;
+        using (var bg = new SolidBrush(Color.FromArgb(0xE9, 0xEC, 0xF1)))
+            g.FillRectangle(bg, 0, 0, Width, Height);
+        g.SetClip(new Rectangle(1, 1, Width - 2, Height - 2));
         if (Indeterminate)
         {
             float w = Width * 0.28f, x = shine * Width - w / 2;
@@ -157,7 +157,10 @@ public class SmoothBar : Control
             var blend = new System.Drawing.Drawing2D.ColorBlend { Positions = new[] { 0f, .5f, 1f }, Colors = new[] { Color.FromArgb(0, 0x22, 0xB1, 0x4C), Color.FromArgb(0x22, 0xB1, 0x4C), Color.FromArgb(0, 0x22, 0xB1, 0x4C) } };
             lb.InterpolationColors = blend;
             g.FillRectangle(lb, x, 0, w, Height);
-            g.ResetClip(); return;
+            g.ResetClip();
+            using var bp = new Pen(Color.FromArgb(0xA9, 0xB4, 0xC2));
+            g.DrawRectangle(bp, 0, 0, Width - 1, Height - 1);
+            return;
         }
         int fw = (int)Math.Round(shown * Width);
         if (fw > 0)
@@ -174,6 +177,8 @@ public class SmoothBar : Control
             }
         }
         g.ResetClip();
+        using var border = new Pen(Color.FromArgb(0xA9, 0xB4, 0xC2));
+        g.DrawRectangle(border, 0, 0, Width - 1, Height - 1);
     }
 }
 

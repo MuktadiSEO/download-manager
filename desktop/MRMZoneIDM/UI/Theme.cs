@@ -5,7 +5,28 @@ namespace MRMZoneIDM.UI;
 
 public static class Theme
 {
-    public static readonly Color Bar = Color.FromArgb(0x2B, 0x2F, 0x36);
+    public static readonly Color Bar = Color.FromArgb(0x2B, 0x2F, 0x36);   // same charcoal as the mobile app
+    public static readonly Color Navy = Color.FromArgb(0x2B, 0x2F, 0x36);
+
+    [System.Runtime.InteropServices.DllImport("dwmapi.dll")]
+    static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
+
+    /// <summary>Navy window title bar with white text (Windows 11; silently ignored on Windows 10).</summary>
+    public static void NavyCaption(Form f)
+    {
+        void Apply()
+        {
+            try
+            {
+                int cap = Navy.R | Navy.G << 8 | Navy.B << 16, txt = 0xFFFFFF;
+                DwmSetWindowAttribute(f.Handle, 35, ref cap, 4);  // DWMWA_CAPTION_COLOR
+                DwmSetWindowAttribute(f.Handle, 36, ref txt, 4);  // DWMWA_TEXT_COLOR
+                DwmSetWindowAttribute(f.Handle, 34, ref cap, 4);  // DWMWA_BORDER_COLOR
+            }
+            catch { }
+        }
+        if (f.IsHandleCreated) Apply(); else f.HandleCreated += (_, _) => Apply();
+    }
     public static readonly Color Blue = Color.FromArgb(0x15, 0x65, 0xC0);
     public static readonly Color Orange = Color.FromArgb(0xFF, 0x63, 0x47);
     public static readonly Color Green = Color.FromArgb(0x2E, 0x7D, 0x32);
@@ -24,7 +45,7 @@ public static class Theme
     public static int S(int v) => (int)Math.Round(v * K);
     public static Size S(int w, int h) => new(S(w), S(h));
     /// <summary>Scale a form written in 100% pixels to the screen's DPI (fonts are already DPI-sized).</summary>
-    public static void Fit(Form f) { if (K > 1.01f) f.Scale(new SizeF(K, K)); }
+    public static void Fit(Form f) { NavyCaption(f); if (K > 1.01f) f.Scale(new SizeF(K, K)); }
     public static readonly Font Title = new("Segoe UI", 14f, FontStyle.Bold);
 
     static Image logo;

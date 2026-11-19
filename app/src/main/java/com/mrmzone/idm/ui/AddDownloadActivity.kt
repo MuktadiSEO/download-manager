@@ -49,6 +49,15 @@ class AddDownloadActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Shared from Facebook / YouTube / Instagram…: show the small quality popup right over that app
+        if (savedInstanceState == null && intent.action == Intent.ACTION_SEND) {
+            val links = UrlUtil.extractAll(intent.getStringExtra(Intent.EXTRA_TEXT))
+            val v = links.firstOrNull { Ytdlp.isVideoSite(it) }
+            if (v != null && links.size == 1) {
+                startActivity(Intent(this, VideoQualityActivity::class.java).putExtra("url", v).putExtra("fallback", true).putExtra("popup", true))
+                finish(); overridePendingTransition(0, 0); return
+            }
+        }
         setContentView(R.layout.activity_add)
         url = findViewById(R.id.url); name = findViewById(R.id.name); cat = findViewById(R.id.category)
         info = findViewById(R.id.probeInfo); probing = findViewById(R.id.probing); saveTo = findViewById(R.id.saveTo)

@@ -37,6 +37,7 @@ import com.mrmzone.idm.data.DownloadItem
 import com.mrmzone.idm.data.Status
 import com.mrmzone.idm.engine.DM
 import com.mrmzone.idm.engine.FileStore
+import com.mrmzone.idm.engine.Ytdlp
 import com.mrmzone.idm.util.Fmt
 import com.mrmzone.idm.util.UrlUtil
 
@@ -279,8 +280,17 @@ class MainActivity : AppCompatActivity() {
         if (url == DM.prefs.lastClip) return
         DM.prefs.lastClip = url
         if (DM.snapshot().any { it.url == url }) return
-        Snackbar.make(findViewById(R.id.list), "Download link from clipboard?\n$url", Snackbar.LENGTH_LONG)
-            .setAction("Download") { openAdd(url) }.show()
+        val video = Ytdlp.isVideoSite(url)
+        val sb = Snackbar.make(findViewById(R.id.list), (if (video) "▶ Download this video?\n" else "⬇ Download this link?\n") + url.take(70), Snackbar.LENGTH_INDEFINITE)
+            .setAction("Download") {
+                if (video) startActivity(Intent(this, VideoQualityActivity::class.java).putExtra("url", url).putExtra("fallback", true))
+                else openAdd(url)
+            }
+            .setAnchorView(R.id.fab)
+        sb.view.setOnClickListener { sb.dismiss() }
+        (sb.view.findViewById<android.widget.TextView>(com.google.android.material.R.id.snackbar_text))?.maxLines = 3
+        sb.show()
+        Ytdlp.prefetch(this, url)
     }
 
     // ---------------- menu ----------------
