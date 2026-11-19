@@ -40,6 +40,12 @@
             android:taskAffinity=""
             android:theme="@style/Theme.MRM.Dialog"
             android:windowSoftInputMode="adjustResize">
+            <!-- "Download with MRM Zone IDM" in the text-selection menu (Chrome & every app) -->
+            <intent-filter android:label="@string/download_with">
+                <action android:name="android.intent.action.PROCESS_TEXT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
             <intent-filter android:label="@string/download_with">
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -58,6 +64,8 @@
             </intent-filter>
         </activity>
 
+        <activity android:name=".ui.QuickDownloadActivity" android:theme="@style/Theme.MRM.Dialog" android:excludeFromRecents="true"
+            android:windowSoftInputMode="adjustResize" />
         <activity android:name=".ui.ProgressActivity" android:theme="@style/Theme.MRM.Dialog" android:excludeFromRecents="true" />
         <activity android:name=".ui.VideoQualityActivity" android:theme="@style/Theme.MRM.Dialog" android:excludeFromRecents="true" />
         <activity android:name=".ui.CompleteActivity" android:theme="@style/Theme.MRM.Dialog" android:excludeFromRecents="true" />

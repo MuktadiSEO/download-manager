@@ -50,11 +50,24 @@ class AddDownloadActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // Shared from Facebook / YouTube / Instagram…: show the small quality popup right over that app
-        if (savedInstanceState == null && intent.action == Intent.ACTION_SEND) {
-            val links = UrlUtil.extractAll(intent.getStringExtra(Intent.EXTRA_TEXT))
-            val v = links.firstOrNull { Ytdlp.isVideoSite(it) }
-            if (v != null && links.size == 1) {
-                startActivity(Intent(this, VideoQualityActivity::class.java).putExtra("url", v).putExtra("fallback", true).putExtra("popup", true))
+        // Shared link / selected text (Chrome, any app) → small popup over that app, one tap to download
+        if (savedInstanceState == null && (intent.action == Intent.ACTION_SEND || intent.action == Intent.ACTION_PROCESS_TEXT)) {
+            val text = if (intent.action == Intent.ACTION_SEND) intent.getStringExtra(Intent.EXTRA_TEXT)
+                       else intent.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT)?.toString()
+            var links = UrlUtil.extractAll(text)
+            if (links.isEmpty() && intent.action == Intent.ACTION_PROCESS_TEXT) {
+                // selected "example.com/file.zip" without http
+                text?.trim()?.takeIf { !it.contains(' ') && Regex("^[\\w.-]+\\.[a-z]{2,}(/\\S*)?$", RegexOption.IGNORE_CASE).matches(it) }?.let { links = listOf("https://$it") }
+            }
+            if (links.isEmpty() && intent.action == Intent.ACTION_PROCESS_TEXT) {
+                Toast.makeText(this, "No download link in the selected text", Toast.LENGTH_SHORT).show()
+                finish(); return
+            }
+            if (links.size == 1) {
+                val u = links[0]
+                val target = if (Ytdlp.isVideoSite(u)) Intent(this, VideoQualityActivity::class.java).putExtra("fallback", true).putExtra("popup", true)
+                             else Intent(this, QuickDownloadActivity::class.java)
+                startActivity(target.putExtra("url", u))
                 finish(); overridePendingTransition(0, 0); return
             }
         }
