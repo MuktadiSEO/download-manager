@@ -29,6 +29,19 @@ public static class Ytdlp
         "vimeo.com","dailymotion.com","dai.ly","twitch.tv","reddit.com","soundcloud.com","bilibili.com","likee.video","pinterest.com",
         "linkedin.com","threads.net","rumble.com","vk.com","ok.ru","streamable.com","bitchute.com" };
 
+    static readonly Regex StatRe = new(@"^\s*(?:[\d.,]+\s*[KkMmBb]?\s*(?:views?|reactions?|comments?|shares?|likes?|plays?)\s*[·•|,\-–]?\s*)+\|?\s*", RegexOptions.IgnoreCase);
+    static readonly Regex TailRe = new(@"(\s*(#[\p{L}\p{N}_]+|\|\s*(Facebook|Instagram|TikTok|YouTube)\s*$))+\s*$", RegexOptions.IgnoreCase);
+
+    /// <summary>"60K views · 1K reactions | Real title #tag #tag | Facebook" → "Real title".</summary>
+    public static string CleanTitle(string t)
+    {
+        if (string.IsNullOrWhiteSpace(t)) return "video";
+        var r = StatRe.Replace(t.Trim(), "");
+        r = TailRe.Replace(r, "");
+        r = Regex.Replace(r, @"\s+", " ").Trim(' ', '|', '-', '·', '•', '_');
+        return r.Length == 0 ? t.Trim() : r;
+    }
+
     public static bool IsVideoSite(string url)
     {
         try { var h = new Uri(url).Host.ToLowerInvariant(); return VideoHosts.Any(v => h == v || h.EndsWith("." + v)); } catch { return false; }
@@ -157,7 +170,7 @@ public static class Ytdlp
         var bestM4a = audios.Where(x => x.Ext == "m4a").OrderByDescending(x => Math.Max(x.Abr, x.Tbr)).FirstOrDefault();
         var bestWebmA = audios.Where(x => x.Ext == "webm").OrderByDescending(x => Math.Max(x.Abr, x.Tbr)).FirstOrDefault();
         var bestAudio = audios.OrderByDescending(x => Math.Max(x.Abr, x.Tbr)).FirstOrDefault();
-        var info = new VideoInfo { Title = S(r, "title") ?? "video", Thumbnail = S(r, "thumbnail"), Uploader = S(r, "uploader"), Duration = dur, PageUrl = S(r, "webpage_url") ?? url };
+        var info = new VideoInfo { Title = CleanTitle(S(r, "title") ?? S(r, "fulltitle") ?? "video"), Thumbnail = S(r, "thumbnail"), Uploader = S(r, "uploader"), Duration = dur, PageUrl = S(r, "webpage_url") ?? url };
 
         foreach (var g in list.Where(x => x.IsVideo).GroupBy(x => x.Height).OrderByDescending(g => g.Key))
         {

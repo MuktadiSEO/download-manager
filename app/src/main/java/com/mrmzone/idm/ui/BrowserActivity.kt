@@ -553,7 +553,7 @@ return JSON.stringify(o.slice(0,4000));})()"""
     /** IDM-style "Download this video" list: every video found on the page with its qualities and sizes. */
     private fun showMedia(t: Tab) {
         val pageUrl = t.web.url.orEmpty()
-        val title = Http.sanitize((t.web.title ?: "video").take(120))
+        val title = Http.sanitize(Ytdlp.cleanTitle(t.web.title).take(120))
         var dlg: AlertDialog? = null
         val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding((16 * dp).toInt(), (4 * dp).toInt(), (16 * dp).toInt(), 0) }
         fun header(text: String) = list.addView(TextView(this).apply {

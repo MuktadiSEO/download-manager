@@ -58,8 +58,8 @@ public static class Theme
 
     static bool FontAvailable(string name)
     {
-        using var f = new InstalledFontCollection();
-        return f.Families.Any(x => x.Name == name);
+        // cheap check (enumerating every installed font is slow at startup)
+        try { using var f = new Font(name, 10f); return string.Equals(f.Name, name, StringComparison.OrdinalIgnoreCase); } catch { return false; }
     }
 
     public static Bitmap Glyph(string glyph, Color color, int size)
@@ -144,4 +144,80 @@ public static class Theme
         }
         catch { }
     }
+
+    public static readonly Color Hover = Color.FromArgb(0xE6, 0xEF, 0xFB);
+    public static readonly Color Pressed = Color.FromArgb(0xD2, 0xE2, 0xF8);
+    public static readonly Color HoverBorder = Color.FromArgb(0xB9, 0xCF, 0xEE);
+    public static readonly Color Panel = Color.FromArgb(0xF6, 0xF8, 0xFB);
+    public static readonly Color Line = Color.FromArgb(0xDD, 0xE3, 0xEB);
+    public static readonly Color Zebra = Color.FromArgb(0xF8, 0xFA, 0xFD);
+    public static ToolStripRenderer Renderer => new ProRenderer();
+}
+
+/// <summary>Flat, modern look for toolbars, menus and the status bar (rounded hover, no gradients).</summary>
+public class ProRenderer : ToolStripProfessionalRenderer
+{
+    public ProRenderer() : base(new ProColors()) { RoundedEdges = false; }
+
+    protected override void OnRenderToolStripBorder(ToolStripRenderEventArgs e)
+    {
+        if (e.ToolStrip is ToolStripDropDown) { using var p = new Pen(Theme.Line); e.Graphics.DrawRectangle(p, 0, 0, e.ToolStrip.Width - 1, e.ToolStrip.Height - 1); return; }
+        if (e.ToolStrip is ToolStrip && e.ToolStrip is not StatusStrip && e.ToolStrip is not MenuStrip)
+        { using var p = new Pen(Theme.Line); e.Graphics.DrawLine(p, 0, e.ToolStrip.Height - 1, e.ToolStrip.Width, e.ToolStrip.Height - 1); }
+    }
+
+    protected override void OnRenderButtonBackground(ToolStripItemRenderEventArgs e)
+    {
+        var it = e.Item;
+        if (!it.Selected && !it.Pressed) return;
+        e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+        var r = new Rectangle(2, 2, it.Width - 5, it.Height - 5);
+        using var path = Theme.Rounded(r, Theme.S(6));
+        using var b = new SolidBrush(it.Pressed ? Theme.Pressed : Theme.Hover);
+        using var p = new Pen(Theme.HoverBorder);
+        e.Graphics.FillPath(b, path); e.Graphics.DrawPath(p, path);
+    }
+
+    protected override void OnRenderSeparator(ToolStripSeparatorRenderEventArgs e)
+    {
+        using var p = new Pen(Theme.Line);
+        if (e.Vertical) { int x = e.Item.Width / 2; e.Graphics.DrawLine(p, x, Theme.S(8), x, e.Item.Height - Theme.S(8)); }
+        else { int y = e.Item.Height / 2; e.Graphics.DrawLine(p, Theme.S(28), y, e.Item.Width - 4, y); }
+    }
+
+    protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
+    {
+        if (e.ToolStrip is StatusStrip) e.TextColor = e.Item is ToolStripStatusLabel { IsLink: true } ? Color.FromArgb(0xFF, 0xC8, 0x3C) : Color.FromArgb(0xD7, 0xDE, 0xE8);
+        base.OnRenderItemText(e);
+    }
+}
+
+public class ProColors : ProfessionalColorTable
+{
+    public override Color MenuItemSelected => Theme.Hover;
+    public override Color MenuItemBorder => Theme.HoverBorder;
+    public override Color MenuItemSelectedGradientBegin => Theme.Hover;
+    public override Color MenuItemSelectedGradientEnd => Theme.Hover;
+    public override Color MenuItemPressedGradientBegin => Color.White;
+    public override Color MenuItemPressedGradientEnd => Color.White;
+    public override Color MenuBorder => Theme.Line;
+    public override Color ToolStripDropDownBackground => Color.White;
+    public override Color ImageMarginGradientBegin => Color.White;
+    public override Color ImageMarginGradientMiddle => Color.White;
+    public override Color ImageMarginGradientEnd => Color.White;
+    public override Color MenuStripGradientBegin => Color.White;
+    public override Color MenuStripGradientEnd => Color.White;
+    public override Color ToolStripGradientBegin => Theme.Panel;
+    public override Color ToolStripGradientMiddle => Theme.Panel;
+    public override Color ToolStripGradientEnd => Theme.Panel;
+    public override Color ToolStripBorder => Theme.Line;
+    public override Color SeparatorDark => Theme.Line;
+    public override Color SeparatorLight => Color.White;
+    public override Color StatusStripGradientBegin => Theme.Bar;
+    public override Color StatusStripGradientEnd => Theme.Bar;
+    public override Color ButtonSelectedHighlight => Theme.Hover;
+    public override Color ButtonSelectedBorder => Theme.HoverBorder;
+    public override Color ButtonPressedHighlight => Theme.Pressed;
+    public override Color CheckBackground => Theme.Hover;
+    public override Color CheckSelectedBackground => Theme.Pressed;
 }

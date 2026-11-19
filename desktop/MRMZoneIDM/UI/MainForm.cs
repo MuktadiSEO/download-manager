@@ -29,8 +29,11 @@ public class MainForm : Form
         StartPosition = FormStartPosition.CenterScreen;
         Font = Theme.UiFont;
         BackColor = Color.White;
+        SuspendLayout();
+        DoubleBuffered = true;
         BuildUi();
         Theme.Fit(this);
+        ResumeLayout(true);
         Manager.Changed += () => changed = true;
         Manager.Completed += d => BeginInvokeSafe(() => OnCompleted(d));
         Manager.Failed += d => BeginInvokeSafe(() => tray.ShowBalloonTip(4000, "Download failed", d.FileName + "\n" + d.Error, ToolTipIcon.Error));
@@ -80,7 +83,7 @@ public class MainForm : Form
         var header = Theme.Header("MRM Zone IDM", "Internet Download Manager  •  v" + App.Version);
 
         // menu
-        var menu = new MenuStrip { Font = Theme.UiFont, BackColor = Color.White };
+        var menu = new MenuStrip { Font = Theme.UiFont, BackColor = Color.White, Renderer = Theme.Renderer, Padding = new Padding(Theme.S(6), Theme.S(2), 0, Theme.S(2)) };
         var mTasks = new ToolStripMenuItem("&Tasks");
         mTasks.DropDownItems.Add(new ToolStripMenuItem("Add new download…", null, (_, _) => OpenAdd(null)) { ShortcutKeys = Keys.Control | Keys.N });
         mTasks.DropDownItems.Add("Download video (YouTube & more)…", null, (_, _) => OpenVideoPrompt());
@@ -106,7 +109,7 @@ public class MainForm : Form
         menu.Items.AddRange(new ToolStripItem[] { mTasks, mFile, mHelp });
 
         // toolbar (IDM style)
-        var tb = new ToolStrip { ImageScalingSize = Theme.S(26, 26), GripStyle = ToolStripGripStyle.Hidden, BackColor = Color.FromArgb(0xF6, 0xF8, 0xFB), Padding = new Padding(6, 4, 6, 4), Font = new Font("Segoe UI", 9f), RenderMode = ToolStripRenderMode.System };
+        var tb = new ToolStrip { ImageScalingSize = Theme.S(26, 26), GripStyle = ToolStripGripStyle.Hidden, BackColor = Color.FromArgb(0xF6, 0xF8, 0xFB), Padding = new Padding(6, 4, 6, 4), Font = new Font("Segoe UI", 9f), Renderer = Theme.Renderer };
         void T(string text, string glyph, Color c, Action a)
         {
             var b = new ToolStripButton(text, Theme.Glyph(glyph, c, 26), (_, _) => a()) { TextImageRelation = TextImageRelation.ImageAboveText, ImageScaling = ToolStripItemImageScaling.None, Padding = new Padding(Theme.S(7), Theme.S(2), Theme.S(7), Theme.S(2)) };
@@ -157,9 +160,19 @@ public class MainForm : Form
         // list
         list.Columns.Add("File Name", Theme.S(380)); list.Columns.Add("Size", Theme.S(85), HorizontalAlignment.Right); list.Columns.Add("Status", Theme.S(125));
         list.Columns.Add("Time left", Theme.S(90)); list.Columns.Add("Transfer rate", Theme.S(100)); list.Columns.Add("Last Try Date", Theme.S(150)); list.Columns.Add("Description", Theme.S(240));
-        var small = new ImageList { ImageSize = Theme.S(20, 20), ColorDepth = ColorDepth.Depth32Bit };
+        var small = new ImageList { ImageSize = Theme.S(22, 22), ColorDepth = ColorDepth.Depth32Bit };
         foreach (var c in Categories.Names) { var (g, col) = Theme.Cat(c); small.Images.Add(c, Theme.Badge(g, col, 20)); }
         list.SmallImageList = small;
+        // last column fills the remaining width (no horizontal scrollbar)
+        void FitColumns()
+        {
+            if (list.Columns.Count < 7) return;
+            int used = 0; for (int i = 0; i < 6; i++) used += list.Columns[i].Width;
+            int w = list.ClientSize.Width - used - 2;
+            list.Columns[6].Width = Math.Max(Theme.S(120), w);
+        }
+        list.Resize += (_, _) => FitColumns();
+        list.ColumnWidthChanged += (_, e) => { if (e.ColumnIndex != 6) FitColumns(); };
         list.DoubleClick += (_, _) => { var d = Selected().FirstOrDefault(); if (d != null) OpenItem(d); };
         list.KeyDown += (_, e) => { if (e.KeyCode == Keys.Delete) DeleteSelected(); if (e.KeyCode == Keys.Enter) { var d = Selected().FirstOrDefault(); if (d != null) OpenItem(d); } };
         list.ColumnClick += (_, e) => { sortCol = e.Column == sortCol ? -sortCol - 1 : e.Column; changed = true; };
@@ -171,7 +184,7 @@ public class MainForm : Form
         split.Panel1.Controls.Add(tree);
         split.Panel2.Controls.Add(list);
 
-        var status = new StatusStrip { BackColor = Theme.Bar, ForeColor = Color.White, SizingGrip = false };
+        var status = new StatusStrip { BackColor = Theme.Bar, ForeColor = Color.White, SizingGrip = false, Renderer = Theme.Renderer };
         stSpeed.ForeColor = stActive.ForeColor = Color.White;
         stExt.LinkColor = Color.FromArgb(0xFF, 0xC8, 0x3C); stExt.ActiveLinkColor = Color.White;
         stExt.Click += (_, _) => new ExtensionForm().ShowDialog(this);
@@ -187,7 +200,7 @@ public class MainForm : Form
 
         // tray
         tray.Icon = Theme.AppIcon; tray.Text = "MRM Zone IDM"; tray.Visible = true;
-        var tm = new ContextMenuStrip();
+        var tm = new ContextMenuStrip { Font = Theme.UiFont, Renderer = Theme.Renderer };
         tm.Items.Add("Open MRM Zone IDM", null, (_, _) => ShowMain());
         tm.Items.Add("Add new download…", null, (_, _) => { ShowMain(); OpenAdd(null); });
         tm.Items.Add("Stop all downloads", null, (_, _) => Manager.PauseAll());
@@ -202,7 +215,7 @@ public class MainForm : Form
 
     ContextMenuStrip BuildContextMenu()
     {
-        var m = new ContextMenuStrip { Font = Theme.UiFont };
+        var m = new ContextMenuStrip { Font = Theme.UiFont, Renderer = Theme.Renderer };
         m.Items.Add("Open", null, (_, _) => Selected().FirstOrDefault()?.Let(OpenFile));
         m.Items.Add("Open folder", null, (_, _) => Selected().FirstOrDefault()?.Let(d => Theme.ShowInFolder(d.Status == DStatus.Completed ? d.FullPath : d.SaveDir + "\\")));
         m.Items.Add("Show progress", null, (_, _) => Selected().FirstOrDefault()?.Let(d => ProgressForm.ShowFor(d.Id)));
@@ -264,7 +277,7 @@ public class MainForm : Form
             list.Items.Clear(); rows.Clear();
             foreach (var d in items)
             {
-                var r = new ListViewItem(new string[7]) { Tag = d.Id, ImageKey = d.Category };
+                var r = new ListViewItem(new string[7]) { Tag = d.Id, ImageKey = d.Category, BackColor = list.Items.Count % 2 == 1 ? Theme.Zebra : Color.White };
                 rows[d.Id] = r; list.Items.Add(r);
                 if (sel.Contains(d.Id)) r.Selected = true;
             }

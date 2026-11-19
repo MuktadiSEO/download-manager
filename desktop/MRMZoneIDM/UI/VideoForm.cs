@@ -24,7 +24,7 @@ public class VideoForm : Form
 
     VideoForm(string pageUrl, string title, string referer, string cookies, string ua, List<MediaRef> media, bool fallbackLinks)
     {
-        this.pageUrl = pageUrl; this.title = title; this.referer = referer; this.cookies = cookies; this.ua = ua; this.media = media; this.fallbackLinks = fallbackLinks;
+        this.pageUrl = pageUrl; this.title = string.IsNullOrWhiteSpace(title) ? title : Ytdlp.CleanTitle(title); this.referer = referer; this.cookies = cookies; this.ua = ua; this.media = media; this.fallbackLinks = fallbackLinks;
         Text = "Download video — MRM Zone IDM"; Icon = Theme.AppIcon; Font = Theme.UiFont; BackColor = Color.White;
         Size = new Size(620, 720); StartPosition = FormStartPosition.CenterScreen; TopMost = true;
         // Width must match the form before the right-anchored Close button is added, otherwise the anchor

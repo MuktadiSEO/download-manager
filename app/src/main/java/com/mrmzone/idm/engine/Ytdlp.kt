@@ -37,6 +37,18 @@ object Ytdlp {
         "linkedin.com", "threads.net", "rumble.com", "vk.com", "ok.ru", "streamable.com", "bitchute.com",
     )
 
+    private val statRe = Regex("""^\s*(?:[\d.,]+\s*[KkMmBb]?\s*(?:views?|reactions?|comments?|shares?|likes?|plays?)\s*[·•|,\-–]?\s*)+\|?\s*""", RegexOption.IGNORE_CASE)
+    private val tailRe = Regex("""(\s*(#[\p{L}\p{N}_]+|\|\s*(Facebook|Instagram|TikTok|YouTube)\s*$))+\s*$""", RegexOption.IGNORE_CASE)
+
+    /** "60K views · 1K reactions | Real title #tag | Facebook" → "Real title" */
+    fun cleanTitle(t: String?): String {
+        if (t.isNullOrBlank()) return "video"
+        var r = statRe.replace(t.trim(), "")
+        r = tailRe.replace(r, "")
+        r = r.replace(Regex("\\s+"), " ").trim(' ', '|', '-', '·', '•', '_')
+        return r.ifEmpty { t.trim() }
+    }
+
     fun isVideoSite(url: String?): Boolean {
         val host = runCatching { URL(url).host.lowercase() }.getOrNull() ?: return false
         return videoHosts.any { host == it || host.endsWith(".$it") }
@@ -214,7 +226,7 @@ object Ytdlp {
             out += Quality("MP3", "Audio only (MP3)", "ba/b", "mp3", "mp3", -1, true)
         }
         val result = Info(
-            title = info.title ?: info.fulltitle ?: "video",
+            title = cleanTitle(info.title ?: info.fulltitle),
             thumbnail = info.thumbnail,
             duration = info.duration,
             uploader = info.uploader,
