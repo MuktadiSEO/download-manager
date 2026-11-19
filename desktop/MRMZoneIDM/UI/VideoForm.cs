@@ -186,6 +186,8 @@ public class VideoForm : Form
             if (q.AudioOnly && !ah) { ah = true; Section("AUDIO ONLY"); }
             AddRow(q.Label, q.Detail, q.Size, q.Approx, q.AudioOnly, () => Start(info, q, target, tRef, tCookies));
         }
+        // breathing room under the last row (a scrolling FlowLayoutPanel ignores bottom padding)
+        rows.Controls.Add(new Panel { Height = Theme.S(14), Width = 10, Margin = Padding.Empty, BackColor = Color.White });
         FitRows();
     }
 

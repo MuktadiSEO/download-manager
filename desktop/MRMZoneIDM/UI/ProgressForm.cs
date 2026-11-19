@@ -117,7 +117,7 @@ public class ProgressForm : Form
         if (d.TotalSize > 0) bar.Target = Math.Clamp(d.Downloaded / (double)d.TotalSize, 0, 1);
         pause.Text = d.Status.IsActive() ? "Pause" : "Resume";
         var segs = d.LiveSegments.Count > 0 ? d.LiveSegments : d.Segments ?? new();
-        seg.Set(segs, d.TotalSize, d.IsYtdlp ? d.Progress : -1);
+        seg.Set(segs, d.TotalSize, d.IsYtdlp ? (d.TotalSize > 0 ? Math.Min(100, d.Downloaded * 100.0 / d.TotalSize) : d.Progress) : -1);
         if (!conns.Visible) return;
         bool rebuild = conns.Items.Count != segs.Count;
         if (rebuild) conns.BeginUpdate();
@@ -137,19 +137,40 @@ public class ProgressForm : Form
 /// <summary>IDM-style progress bar that glides smoothly to the real value (60 fps) with a moving shine.</summary>
 public class SmoothBar : Control
 {
-    double shown, target; float shine = -0.3f;
+    double shown, target, rate; long lastSet = Environment.TickCount64; float shine = -0.3f;
     readonly System.Windows.Forms.Timer anim = new() { Interval = 16 };
     public bool Indeterminate { get; set; }
     public bool Active { get; set; } = true;
-    public double Target { get => target; set { target = value; if (shown > target + 0.02) shown = target; } }
+    /// <summary>
+    /// Real progress (0..1). Between updates the bar keeps gliding at the measured rate, so it moves
+    /// continuously instead of jumping each time new data is reported (like IDM).
+    /// </summary>
+    public double Target
+    {
+        get => target;
+        set
+        {
+            var now = Environment.TickCount64; var dt = (now - lastSet) / 1000.0;
+            if (value < target - 0.02) { shown = value; rate = 0; }                 // restarted / new phase (e.g. audio after video)
+            else if (value > target && dt > 0.05) rate = rate <= 0 ? (value - target) / dt : rate * 0.7 + (value - target) / dt * 0.3;
+            if (value != target) lastSet = now;
+            target = value;
+        }
+    }
+    public void Stop() { rate = 0; }
 
     public SmoothBar()
     {
         SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.UserPaint | ControlStyles.ResizeRedraw, true);
         anim.Tick += (_, _) =>
         {
-            var diff = target - shown;
-            shown = Math.Abs(diff) < 0.0005 ? target : shown + diff * 0.12; // ease toward the real value
+            // where the download probably is now: last real value + measured rate (never more than ~1.5 s ahead)
+            double ahead = Active && rate > 0 ? Math.Min(rate * Math.Min((Environment.TickCount64 - lastSet) / 1000.0, 1.5), 0.04) : 0;
+            double goal = Math.Min(1, target + ahead);
+            var diff = goal - shown;
+            if (diff > 0) shown += Math.Max(diff * 0.10, 0.00004);                  // glide forward
+            else if (diff < -0.0005 && !Active) shown = goal;                       // paused: settle on the real value
+            if (shown > goal && diff > 0) shown = goal;
             if (Active || Indeterminate) { shine += Indeterminate ? 0.025f : 0.012f; if (shine > 1.3f) shine = -0.3f; }
             Invalidate();
         };
@@ -199,19 +220,40 @@ public class SmoothBar : Control
 
 public class SegmentBar : Control
 {
-    List<Segment> segs = new(); long total = -1; int pct = -1;
-    public SegmentBar() { DoubleBuffered = true; }
-    public void Set(List<Segment> s, long t, int percent) { segs = s; total = t; pct = percent; Invalidate(); }
+    List<Segment> segs = new(); long total = -1; double pct = -1;
+    // per-segment drawn position, eased toward the real one every frame → smooth movement
+    readonly Dictionary<long, double> drawn = new(); double drawnPct;
+    readonly System.Windows.Forms.Timer anim = new() { Interval = 16 };
+    public SegmentBar()
+    {
+        DoubleBuffered = true;
+        anim.Tick += (_, _) =>
+        {
+            bool moving = false;
+            if (pct >= 0) { var d = pct - drawnPct; if (Math.Abs(d) > 0.01) { drawnPct += d * 0.10; moving = true; } else drawnPct = pct; }
+            foreach (var sg in segs)
+            {
+                double real = sg.Done, cur = drawn.TryGetValue(sg.Start, out var v) ? v : real;
+                if (real < cur) cur = real; else if (real - cur > 1) { cur += (real - cur) * 0.12; moving = true; } else cur = real;
+                drawn[sg.Start] = cur;
+            }
+            if (moving) Invalidate();
+        };
+        anim.Start();
+    }
+    protected override void Dispose(bool disposing) { if (disposing) anim.Dispose(); base.Dispose(disposing); }
+    public void Set(List<Segment> s, long t, double percent) { segs = s; total = t; if (percent < pct) drawnPct = percent; pct = percent; Invalidate(); }
     protected override void OnPaint(PaintEventArgs e)
     {
         var g = e.Graphics; float w = Width, h = Height;
         using var bg = new SolidBrush(Theme.SegBg); using var fill = new SolidBrush(Theme.Blue); using var head = new SolidBrush(Theme.Orange); using var sep = new Pen(Color.White);
         g.FillRectangle(bg, 0, 0, w, h);
-        if (pct >= 0) { g.FillRectangle(fill, 0, 0, w * pct / 100f, h); return; }
+        if (pct >= 0) { g.FillRectangle(fill, 0, 0, (float)(w * drawnPct / 100.0), h); return; }
         if (total <= 0) return;
         foreach (var s in segs)
         {
-            float x0 = s.Start * w / total, x1 = Math.Min(s.Start + s.Done, total) * w / total;
+            double done = drawn.TryGetValue(s.Start, out var dv) ? Math.Min(dv, s.Done) : s.Done;
+            float x0 = s.Start * w / total, x1 = (float)(Math.Min(s.Start + done, total) * w / total);
             if (x1 > x0) g.FillRectangle(fill, x0, 0, x1 - x0, h);
             if (!s.Finished && s.Done > 0) g.FillRectangle(head, Math.Max(x0, x1 - 3), 0, 3, h);
             if (s.Start > 0) g.DrawLine(sep, x0, 0, x0, h);
