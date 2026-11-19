@@ -12,6 +12,7 @@ public class VideoForm : Form
     readonly ProgressBar bar = new() { Dock = DockStyle.Top, Height = 4, Style = ProgressBarStyle.Marquee };
     readonly CheckBox queue = new() { Text = "Add to queue (download later)", AutoSize = true };
     readonly string pageUrl, title, referer, cookies, ua;
+    string customDir;   // folder picked in this window (null = category default)
     readonly List<MediaRef> media;
     readonly bool fallbackLinks;
     readonly CancellationTokenSource cts = new();
@@ -29,9 +30,23 @@ public class VideoForm : Form
         Size = new Size(620, 720); StartPosition = FormStartPosition.CenterScreen; TopMost = true;
         // Width must match the form before the right-anchored Close button is added, otherwise the anchor
         // distance is computed against the default 200px panel and the button ends up off-screen.
-        var bottom = new Panel { Dock = DockStyle.Bottom, Width = ClientSize.Width, Height = 52, Padding = new Padding(16, 10, 16, 10), BackColor = Color.FromArgb(0xF6, 0xF8, 0xFB) };
-        queue.Location = new Point(16, 16); bottom.Controls.Add(queue);
-        var close = Theme.Btn("Close", false, 90); close.Location = new Point(500, 9); close.Anchor = AnchorStyles.Right | AnchorStyles.Top; close.Click += (_, _) => Close();
+        var bottom = new Panel { Dock = DockStyle.Bottom, Width = ClientSize.Width, Height = 78, Padding = new Padding(16, 10, 16, 10), BackColor = Color.FromArgb(0xF6, 0xF8, 0xFB) };
+        // "Save to: D:\Downloads\MRM Zone\Video   Change…" — any folder, remembered for next time
+        var saveTo = new LinkLabel { AutoSize = false, Width = 470, Height = 22, Location = new Point(16, 12), AutoEllipsis = true, LinkBehavior = LinkBehavior.HoverUnderline, LinkColor = Theme.Blue, ActiveLinkColor = Theme.Blue };
+        void ShowFolder()
+        {
+            var f = customDir ?? App.Settings.FolderFor("Video");
+            saveTo.Text = "Save to:  " + f + "    Change…";
+            saveTo.LinkArea = new LinkArea(saveTo.Text.Length - 7, 7);
+        }
+        saveTo.Click += (_, _) =>
+        {
+            using var d = new FolderBrowserDialog { SelectedPath = customDir ?? App.Settings.FolderFor("Video"), Description = "Save this video to…", UseDescriptionForTitle = true };
+            if (d.ShowDialog(this) == DialogResult.OK) { customDir = d.SelectedPath; ShowFolder(); }
+        };
+        ShowFolder(); bottom.Controls.Add(saveTo);
+        queue.Location = new Point(16, 42); bottom.Controls.Add(queue);
+        var close = Theme.Btn("Close", false, 90); close.Location = new Point(500, 24); close.Anchor = AnchorStyles.Right | AnchorStyles.Top; close.Click += (_, _) => Close();
         bottom.Controls.Add(close);
         Controls.Add(rows); Controls.Add(bar); Controls.Add(status);
         Controls.Add(Theme.Header("Download Video", "YouTube • Facebook • Instagram • TikTok • any site"));
@@ -208,10 +223,11 @@ public class VideoForm : Form
     {
         var suffix = q.AudioOnly ? "" : $" [{q.Label}]";
         var cat = q.AudioOnly ? "Music" : "Video";
+        if (customDir != null) App.Settings.RememberFolder(cat, customDir);
         var d = new DownloadItem
         {
             Url = target, FileName = Http.Sanitize((info.Title.Length > 150 ? info.Title[..150] : info.Title) + suffix + "." + q.Ext), Category = cat,
-            SaveDir = App.Settings.FolderFor(cat), TotalSize = q.Size, Resumable = true, Connections = Math.Min(16, App.Settings.MaxConnections),
+            SaveDir = customDir ?? App.Settings.FolderFor(cat), TotalSize = q.Size, Resumable = true, Connections = Math.Min(16, App.Settings.MaxConnections),
             Kind = "ytdlp", FormatSpec = q.FormatSpec, Extra = q.Extra, InQueue = queue.Checked, Description = info.Title,
             Referer = target == pageUrl && Ytdlp.IsVideoSite(target) ? null : tRef, Cookies = target == pageUrl && Ytdlp.IsVideoSite(target) ? null : tCookies,
             UserAgent = target == pageUrl && Ytdlp.IsVideoSite(target) ? null : ua,

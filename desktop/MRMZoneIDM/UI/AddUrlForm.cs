@@ -13,6 +13,7 @@ public class AddUrlForm : Form
     readonly ProgressBar busy = new() { Style = ProgressBarStyle.Marquee, Width = 120, Height = 8, Visible = false };
     string referer, cookies, ua;
     long size = -1; bool resumable; bool nameEdited, folderEdited;
+    readonly CheckBox rememberFolder = new() { Text = "Remember this folder for this category", AutoSize = true, Checked = true, ForeColor = Theme.Gray };
     CancellationTokenSource probeCts;
     readonly System.Windows.Forms.Timer debounce = new() { Interval = 700 };
 
@@ -37,6 +38,7 @@ public class AddUrlForm : Form
         var browse = Theme.Btn("Browse…", false, 82); browse.Height = 27;
         browse.Click += (_, _) => { using var d = new FolderBrowserDialog { SelectedPath = folder.Text }; if (d.ShowDialog(this) == DialogResult.OK) { folder.Text = d.SelectedPath; folderEdited = true; } };
         Row("Save to folder", folder, browse);
+        rememberFolder.Location = new Point(20, y - 8); Controls.Add(rememberFolder); y += 20;
         Controls.Add(new Label { Text = "Category", AutoSize = true, Location = new Point(20, y + 4), ForeColor = Theme.Gray });
         cat.Location = new Point(20, y + 24); cat.Items.AddRange(Categories.Names); Controls.Add(cat);
         Controls.Add(new Label { Text = "Connections", AutoSize = true, Location = new Point(240, y + 4), ForeColor = Theme.Gray });
@@ -111,6 +113,7 @@ public class AddUrlForm : Form
             TotalSize = size, Resumable = resumable, Connections = (int)conns.Value, Referer = referer, Cookies = cookies, UserAgent = ua,
             InQueue = queue.Checked || !start, Description = desc.Text,
         };
+        if (folderEdited && rememberFolder.Checked) App.Settings.RememberFolder(c, d.SaveDir);
         Manager.Add(d, start);
         if (start && App.Settings.ShowStartDialog) ProgressForm.ShowFor(d.Id);
         Close();

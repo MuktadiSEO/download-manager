@@ -26,7 +26,21 @@ public class Settings
     public bool SchedShutdownWhenDone { get; set; }
     public DateTime ToolsUpdateCheck { get; set; }
 
-    public string FolderFor(string category) => Path.Combine(BaseFolder, category ?? "General");
+    /// <summary>Folders the user picked per category ("Video" → "E:\Movies"), remembered like IDM.</summary>
+    public Dictionary<string, string> CategoryFolders { get; set; } = new();
+
+    public string FolderFor(string category) =>
+        CategoryFolders != null && category != null && CategoryFolders.TryGetValue(category, out var f) && !string.IsNullOrWhiteSpace(f)
+            ? f : Path.Combine(BaseFolder, category ?? "General");
+
+    public void RememberFolder(string category, string folder)
+    {
+        if (string.IsNullOrWhiteSpace(category) || string.IsNullOrWhiteSpace(folder)) return;
+        CategoryFolders ??= new();
+        if (string.Equals(folder.TrimEnd('\\'), Path.Combine(BaseFolder, category).TrimEnd('\\'), StringComparison.OrdinalIgnoreCase)) CategoryFolders.Remove(category);
+        else CategoryFolders[category] = folder;
+        Store.Save(this);
+    }
 }
 
 /// <summary>JSON persistence in %AppData%\MRM Zone IDM.</summary>

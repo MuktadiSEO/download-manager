@@ -65,6 +65,14 @@ public class OptionsForm : Form
         var folder = new TextBox { Text = s.BaseFolder, Width = 440, Location = new Point(20, y) }; sv.Controls.Add(folder);
         var br = Theme.Btn("Browse…", false, 90); br.Height = 27; br.Location = new Point(470, y - 2); sv.Controls.Add(br);
         br.Click += (_, _) => { using var d = new FolderBrowserDialog { SelectedPath = folder.Text }; if (d.ShowDialog(this) == DialogResult.OK) folder.Text = d.SelectedPath; };
+        y += 40;
+        var remembered = new Label { AutoSize = false, Width = 540, Height = 110, Location = new Point(20, y), ForeColor = Theme.Gray }; sv.Controls.Add(remembered);
+        void ShowRemembered() => remembered.Text = s.CategoryFolders is { Count: > 0 }
+            ? "Folders you chose (used instead of the main folder):\n" + string.Join("\n", s.CategoryFolders.Select(kv => $"   {kv.Key}  →  {kv.Value}"))
+            : "Tip: you can pick any folder for a single download in the download window (\"Save to … Change…\"). The folder you pick is remembered for that category.";
+        ShowRemembered();
+        var reset = Theme.Btn("Forget chosen folders", false, 180); reset.Location = new Point(20, y + 116); sv.Controls.Add(reset);
+        reset.Click += (_, _) => { s.CategoryFolders?.Clear(); Store.Save(s); ShowRemembered(); };
 
         var v = Page("Video engine"); y = 20;
         var ver = new Label { Text = "yt-dlp version: checking…", AutoSize = true, Location = new Point(20, y) }; v.Controls.Add(ver); y += 30;
