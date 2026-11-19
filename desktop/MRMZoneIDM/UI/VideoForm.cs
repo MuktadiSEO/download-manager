@@ -53,25 +53,42 @@ public class VideoForm : Form
         return pageUrl;
     }
 
+    static bool LooksRandom(string n)
+    {
+        var b = Path.GetFileNameWithoutExtension(n ?? "");
+        return b.Length > 32 && !b.Contains(' ') || b.StartsWith("download", StringComparison.OrdinalIgnoreCase) || b.Length < 3;
+    }
+
+    void ShowFiles(List<MediaRef> files)
+    {
+        if (files.Count == 0) return;
+        Section("VIDEO FILES ON THIS PAGE");
+        int i = 0;
+        foreach (var m in files)
+        {
+            i++;
+            var n = Http.FileNameFrom(null, m.Url, m.Type);
+            var ext = Path.HasExtension(n) ? Path.GetExtension(n) : ".mp4";
+            if (LooksRandom(n)) n = Http.Sanitize((string.IsNullOrWhiteSpace(title) ? "video" : title) + (files.Count > 1 ? $" ({i})" : "") + ext);
+            var file = n;
+            AddRow(n, (m.Type ?? "file") + " • " + Host(m.Url), m.Size, false, false, () =>
+            {
+                var f = new AddUrlForm(m.Url, m.Referer ?? pageUrl, m.Cookies ?? cookies, ua, file, m.Size); f.Show(); Close();
+            });
+        }
+    }
+
     async void Load2()
     {
         rows.Controls.Clear();
-        // direct files first (instant)
-        var files = media.Where(m => m.Kind == "file").GroupBy(m => m.Url).Select(g => g.First()).ToList();
-        if (files.Count > 0)
-        {
-            Section("VIDEO FILES ON THIS PAGE");
-            foreach (var m in files)
-            {
-                var n = Http.FileNameFrom(null, m.Url, m.Type);
-                if (!Path.HasExtension(n) || n.StartsWith("download")) n = Http.Sanitize((title ?? "video")) + ".mp4";
-                AddRow(n, (m.Type ?? "file") + " • " + Host(m.Url), m.Size, false, false, () =>
-                {
-                    var f = new AddUrlForm(m.Url, m.Referer ?? pageUrl, m.Cookies ?? cookies, ua, n, m.Size); f.Show(); Close();
-                });
-            }
-        }
+        // real video files found by the browser (pieces under 1 MB are stream fragments, not videos)
+        var files = media.Where(m => m.Kind == "file" && !(m.Size > 0 && m.Size < 1_000_000))
+                         .GroupBy(m => m.Url).Select(g => g.First()).ToList();
+        bool site = !string.IsNullOrEmpty(pageUrl) && Ytdlp.IsVideoSite(pageUrl);
+        // On YouTube/Facebook/… the engine gives the complete video in every quality, so raw files are only a fallback.
+        if (!site) ShowFiles(files);
         var target = Target(out var tRef, out var tCookies);
+        if (target == null && files.Count == 0 && !string.IsNullOrEmpty(pageUrl)) target = pageUrl; // only fragments found: let the engine try the page
         if (target == null) { bar.Visible = false; status.Text = $"{files.Count} video file(s) found"; return; }
         status.Text = "Finding all qualities…";
         try
@@ -100,7 +117,7 @@ public class VideoForm : Form
         {
             if (IsDisposed || cts.IsCancellationRequested) return;
             bar.Visible = false;
-            if (files.Count > 0) { status.Text = $"{files.Count} video file(s) found"; return; }
+            if (files.Count > 0) { if (site) ShowFiles(files); status.Text = $"{files.Count} video file(s) found"; return; }
             status.Text = "Could not read this page: " + e.Message;
             status.ForeColor = Theme.Red; status.Height = 60;
             if (fallbackLinks || !Ytdlp.IsVideoSite(pageUrl ?? ""))
@@ -159,12 +176,18 @@ public class VideoForm : Form
         };
         var (g, col) = Theme.Cat(audio ? "Music" : "Video");
         var icon = new PictureBox { Image = Theme.Badge(g, col, 34), Size = new Size(34, 34), Location = new Point(12, 12) };
-        var l1 = new Label { Text = label, Font = new Font("Segoe UI Semibold", 11f), AutoSize = true, Location = new Point(56, 8) };
-        var l2 = new Label { Text = detail, ForeColor = Theme.Gray, AutoSize = true, Location = new Point(57, 32) };
+        var l1 = new Label { Text = label, Font = new Font("Segoe UI Semibold", 11f), AutoSize = false, AutoEllipsis = true, Height = 24, Location = new Point(56, 7) };
+        var l2 = new Label { Text = detail, ForeColor = Theme.Gray, AutoSize = false, AutoEllipsis = true, Height = 20, Location = new Point(57, 32) };
+        var tip = new ToolTip(); tip.SetToolTip(l1, label);
         var sz = new Label { Text = size > 0 ? (approx ? "~" : "") + Fmt.Size(size) : "", Font = new Font("Segoe UI Semibold", 10f), AutoSize = true, Anchor = AnchorStyles.Right | AnchorStyles.Top };
         var dl = Theme.Btn("Download", true, 100); dl.Height = 32; dl.Anchor = AnchorStyles.Right | AnchorStyles.Top;
         p.Controls.AddRange(new Control[] { icon, l1, l2, sz, dl });
-        void Lay() { dl.Location = new Point(p.Width - 112, 13); sz.Location = new Point(dl.Left - sz.Width - 12, 19); }
+        void Lay()
+        {
+            dl.Location = new Point(p.Width - 112, 13); sz.Location = new Point(dl.Left - sz.Width - 12, 19);
+            int w = Math.Max(60, (sz.Width > 0 ? sz.Left : dl.Left) - 12 - 56);
+            l1.Width = w; l2.Width = w;
+        }
         p.Resize += (_, _) => Lay(); sz.SizeChanged += (_, _) => Lay(); Lay();
         foreach (Control c in new Control[] { p, icon, l1, l2, sz }) c.Click += (_, _) => click();
         dl.Click += (_, _) => click();
