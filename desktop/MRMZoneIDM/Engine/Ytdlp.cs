@@ -116,6 +116,8 @@ public static class Ytdlp
     public static void Prefetch(string url, string referer = null, string cookies = null, string ua = null)
     {
         if (string.IsNullOrEmpty(url) || IsCached(url)) return;
+        // YouTube: the extension normally sends the player's own quality list within a second → don't run yt-dlp for nothing
+        if (Key(url).StartsWith("yt:")) { _ = Task.Delay(4000).ContinueWith(_ => { if (!IsCached(url)) Start(url, referer, cookies, ua); }); return; }
         _ = Start(url, referer, cookies, ua);
     }
 
@@ -186,6 +188,29 @@ public static class Ytdlp
 
     static string S(JsonElement e, string n) => e.TryGetProperty(n, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
     static double D(JsonElement e, string n) => e.TryGetProperty(n, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetDouble() : 0;
+
+    /// <summary>
+    /// Quality list read from YouTube's own player (by the browser extension): shown instantly.
+    /// Format specs get fallbacks, so the download still works if yt-dlp's client offers other format ids.
+    /// </summary>
+    public static void Seed(string url, string json)
+    {
+        try
+        {
+            var key = Key(url);
+            if (!key.StartsWith("yt:") || IsCached(url)) return;
+            var info = Parse(json, url);
+            if (info.Qualities.Count < 2 || info.Qualities.All(q => q.AudioOnly || q.Label == "Best")) return;
+            foreach (var q in info.Qualities)
+            {
+                var m = Regex.Match(q.Label ?? "", @"^(\d+)p");
+                if (m.Success) { var h = m.Groups[1].Value; q.FormatSpec += $"/bv*[height={h}]+ba/bv*[height<={h}]+ba/b[height<={h}]/b"; }
+                else if (q.AudioOnly) q.FormatSpec += "/ba/b";
+            }
+            Cache.TryAdd(key, (DateTime.Now, info));
+        }
+        catch { }
+    }
 
     static VideoInfo Parse(string json, string url)
     {

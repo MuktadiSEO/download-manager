@@ -768,6 +768,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   };
 
   switch (msg.type) {
+    case 'mrm-yt-seed':
+      quiet(callApp('/prefetch', { pageUrl: msg.pageUrl, ytInfo: msg.info }));
+      sendResponse({ ok: true });
+      return false;
     case 'mrm-video-click': {
       const tabId = sender.tab ? sender.tab.id : -1;
       return respond(async () => {

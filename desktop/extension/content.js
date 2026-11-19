@@ -373,6 +373,15 @@
     });
   } catch (_) { /* ignore */ }
 
+  // YouTube: forward the player's quality list (from ytmain.js) to the app → instant quality list
+  if (window.top === window && /(^|\.)youtube\.com$/i.test(location.hostname)) {
+    window.addEventListener('message', (e) => {
+      if (e.source !== window || !e.data || e.data.__mrm !== 'yt-info') return;
+      try { chrome.runtime.sendMessage({ type: 'mrm-yt-seed', pageUrl: e.data.pageUrl, info: e.data.info }, () => void chrome.runtime.lastError); } catch (_) { /* ignore */ }
+    });
+    window.postMessage({ __mrm: 'yt-want' }, location.origin);
+  }
+
   readSettings();
   scheduleScan();
 })();

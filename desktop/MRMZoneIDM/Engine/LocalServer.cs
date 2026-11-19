@@ -119,6 +119,8 @@ public static class LocalServer
             string S(string n) => r.ValueKind == JsonValueKind.Object && r.TryGetProperty(n, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
             var url = S("url") ?? S("pageUrl");
             if (string.IsNullOrEmpty(url) || !url.StartsWith("http")) return;
+            // YouTube: the player's own quality list, sent by the extension → instant, no yt-dlp needed to show it
+            if (r.TryGetProperty("ytInfo", out var yi) && yi.ValueKind == JsonValueKind.Object) { Ytdlp.Seed(url, yi.GetRawText()); return; }
             // video sites: by page URL (no headers); raw streams: with the page's referer + cookies
             if (S("url") == null) Ytdlp.Prefetch(url);
             else Ytdlp.Prefetch(url, S("referer"), S("cookies"), null);
