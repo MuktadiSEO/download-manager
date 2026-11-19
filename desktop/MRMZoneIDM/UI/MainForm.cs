@@ -356,10 +356,11 @@ public class MainForm : Form
 
     public void OpenAdd(string url, string referer = null, string cookies = null, string ua = null, string fileName = null, long size = -1)
     {
-        ShowMain();
+        // only the download dialog opens; the main window stays where it is (tray / background)
         if (url != null && Ytdlp.IsVideoSite(url)) { VideoForm.Open(url, null, referer, cookies, ua, null); return; }
         var f = new AddUrlForm(url, referer, cookies, ua, fileName, size);
-        f.Show(this); f.Activate();
+        if (Visible) f.Show(this); else f.Show();
+        f.Activate();
     }
 
     void OpenVideoPrompt()
@@ -393,7 +394,6 @@ public class MainForm : Form
 
     void FromExtensionVideo(JsonElement j)
     {
-        ShowMain();
         var media = new List<MediaRef>();
         if (j.TryGetProperty("media", out var arr) && arr.ValueKind == JsonValueKind.Array)
             foreach (var m in arr.EnumerateArray())
@@ -407,7 +407,6 @@ public class MainForm : Form
 
     void FromExtensionLinks(JsonElement j)
     {
-        ShowMain();
         var links = new List<(string url, string text)>();
         if (j.TryGetProperty("links", out var arr) && arr.ValueKind == JsonValueKind.Array)
             foreach (var l in arr.EnumerateArray())
@@ -415,7 +414,9 @@ public class MainForm : Form
                 var u = l.ValueKind == JsonValueKind.String ? l.GetString() : Str(l, "url");
                 if (!string.IsNullOrEmpty(u) && u.StartsWith("http")) links.Add((u, l.ValueKind == JsonValueKind.Object ? Str(l, "text") : null));
             }
-        new LinksForm(links.Select(x => x.url).Distinct().ToList(), Str(j, "pageUrl")).Show(this);
+        var lf = new LinksForm(links.Select(x => x.url).Distinct().ToList(), Str(j, "pageUrl")) { TopMost = true };
+        lf.Shown += (_, _) => { lf.TopMost = false; lf.Activate(); };
+        lf.Show();
     }
 
     // ---------------- window / tray ----------------
