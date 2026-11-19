@@ -37,6 +37,8 @@ class QuickDownloadActivity : AppCompatActivity() {
     private lateinit var spinner: ProgressBar
     private lateinit var saveTo: TextView
     private var nameEdited = false
+    private var referer: String? = null
+    private var cookies: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -105,7 +107,16 @@ class QuickDownloadActivity : AppCompatActivity() {
 
     private fun probe() {
         Thread {
-            val res = runCatching { Http.probe(url, DM.prefs.userAgent, null, null) }
+            cookies = runCatching { android.webkit.CookieManager.getInstance().getCookie(url) }.getOrNull()?.takeIf { it.isNotBlank() }
+            var res = runCatching { Http.probe(url, DM.prefs.userAgent, null, cookies) }
+            // many sites block links opened outside their own pages (hotlink protection) → retry as if clicked on the site
+            if (res.exceptionOrNull()?.message?.let { Regex("HTTP (401|403|406|410|451)").containsMatchIn(it) } == true) {
+                val origin = runCatching { java.net.URL(url).let { "${it.protocol}://${it.host}/" } }.getOrNull()
+                if (origin != null) {
+                    val r2 = runCatching { Http.probe(url, DM.prefs.userAgent, origin, cookies) }
+                    if (r2.isSuccess) { referer = origin; res = r2 }
+                }
+            }
             runOnUiThread {
                 if (isFinishing) return@runOnUiThread
                 spinner.visibility = View.GONE
@@ -118,7 +129,17 @@ class QuickDownloadActivity : AppCompatActivity() {
                     size = pr.size; resumable = pr.resumable
                     if (!nameEdited) { name.setText(pr.fileName); setCategory(Category.fromFileName(pr.fileName)) }
                     status.text = "Size: ${Fmt.size(pr.size)}   •   Resume: ${if (pr.resumable) "Yes ✔" else "No"}"
-                }.onFailure { e -> status.text = "Could not read file info (${e.message ?: "error"}) — you can still download" }
+                }.onFailure { e ->
+                    if (Regex("HTTP (401|403|406|410|451)").containsMatchIn(e.message.orEmpty())) {
+                        // the site only gives the file to a real browser → let the built-in browser fetch it (its cookies + referer)
+                        Toast.makeText(this, "This site blocks direct links — getting the file through MRM Zone browser…", Toast.LENGTH_LONG).show()
+                        val origin = runCatching { java.net.URL(url).let { "${it.protocol}://${it.host}/" } }.getOrNull()
+                        startActivity(Intent(this, BrowserActivity::class.java).putExtra("url", url).putExtra("referer", origin)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
+                        finish(); return@runOnUiThread
+                    }
+                    status.text = "Could not read file info (${e.message ?: "error"}) — you can still download"
+                }
             }
         }.start()
     }
@@ -126,7 +147,7 @@ class QuickDownloadActivity : AppCompatActivity() {
     private fun add(start: Boolean) {
         val n = Http.sanitize(name.text.toString().ifBlank { Http.fileNameFrom(null, url, null) })
         val item = DownloadItem(url = url, fileName = n, category = if (nameEdited) Category.fromFileName(n) else cat, totalSize = size, resumable = resumable,
-            connections = DM.prefs.maxConnections, userAgent = DM.prefs.userAgent, inQueue = !start)
+            connections = DM.prefs.maxConnections, userAgent = DM.prefs.userAgent, referer = referer, cookies = cookies, inQueue = !start)
         DM.add(item, start)
         Toast.makeText(this, if (start) "MRM Zone IDM: downloading $n — see notification" else "Added to queue", Toast.LENGTH_SHORT).show()
         finish()

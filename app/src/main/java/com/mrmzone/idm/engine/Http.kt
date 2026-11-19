@@ -87,6 +87,11 @@ object Http {
         if (name.isNullOrBlank()) {
             val seg = runCatching { URLDecoder.decode(URL(url).path.substringAfterLast('/'), "UTF-8") }.getOrNull()
             if (!seg.isNullOrBlank() && seg.contains('.') && seg.substringAfterLast('.').length in 1..5) name = seg
+            // "files-5GB-zip" → "files-5GB.zip"
+            if (name.isNullOrBlank() && !seg.isNullOrBlank())
+                Regex("^(.+)[-_](zip|rar|7z|pdf|mp4|mkv|mp3|apk|exe|iso|tar|gz|jpg|png|docx?|xlsx?)$", RegexOption.IGNORE_CASE).find(seg)?.let { m ->
+                    name = m.groupValues[1] + "." + m.groupValues[2].lowercase()
+                }
         }
         if (name.isNullOrBlank()) name = URLUtil.guessFileName(url, disposition, mime)
         return sanitize(name ?: "download.bin")

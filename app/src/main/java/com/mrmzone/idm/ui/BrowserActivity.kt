@@ -166,7 +166,7 @@ class BrowserActivity : AppCompatActivity() {
             }
         })
         restoreTabs()
-        intent.getStringExtra("url")?.let { newTab(it) }
+        intent.getStringExtra("url")?.let { newTab(it, intent.getStringExtra("referer")) }
         if (tabs.isEmpty()) newTab(DM.prefs.homePage)
     }
 
@@ -238,7 +238,7 @@ class BrowserActivity : AppCompatActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        intent.getStringExtra("url")?.let { newTab(it) }
+        intent.getStringExtra("url")?.let { newTab(it, intent.getStringExtra("referer")) }
     }
 
     override fun onStart() {
@@ -384,11 +384,12 @@ class BrowserActivity : AppCompatActivity() {
         return t
     }
 
-    private fun newTab(url: String) {
+    private fun newTab(url: String, referer: String? = null) {
         val t = createWebView()
         tabs.add(t)
         switchTo(tabs.size - 1)
-        load(t, url)
+        // protected file links (hotlink check): open with the site's own page as Referer, the download listener catches the file
+        if (referer != null && url.startsWith("http")) t.web.loadUrl(url, mapOf("Referer" to referer)) else load(t, url)
         saveTabs()
     }
 
