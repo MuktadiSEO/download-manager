@@ -52,10 +52,10 @@ APK: `app/build/outputs/apk/debug/app-debug.apk`. GitHub Actions also builds it 
 
 # MRM Zone IDM for Windows (PC)
 
-`release/MRM-Zone-IDM-Setup-1.0.4.exe` — installer for Windows 10/11 64-bit (no admin rights needed).
+`release/MRM-Zone-IDM-Setup-1.0.5.exe` — installer for Windows 10/11 64-bit (no admin rights needed).
 
 ## Install
-1. Run **MRM-Zone-IDM-Setup-1.0.4.exe** → Next → Install → Finish (it launches the app).
+1. Run **MRM-Zone-IDM-Setup-1.0.5.exe** → Next → Install → Finish (it launches the app).
    Windows SmartScreen may say "Windows protected your PC" because the installer is not code-signed:
    click **More info → Run anyway**.
 2. On first start the app shows **"Click to install the browser extension"**:

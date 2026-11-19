@@ -85,11 +85,11 @@ public class VideoForm : Form
         var files = media.Where(m => m.Kind == "file" && !(m.Size > 0 && m.Size < 1_000_000))
                          .GroupBy(m => m.Url).Select(g => g.First()).ToList();
         bool site = !string.IsNullOrEmpty(pageUrl) && Ytdlp.IsVideoSite(pageUrl);
-        // On YouTube/Facebook/… the engine gives the complete video in every quality, so raw files are only a fallback.
-        if (!site) ShowFiles(files);
+        // The engine gives the complete video in every quality, so raw files are shown only
+        // when there is nothing for the engine to read, or when it fails.
         var target = Target(out var tRef, out var tCookies);
         if (target == null && files.Count == 0 && !string.IsNullOrEmpty(pageUrl)) target = pageUrl; // only fragments found: let the engine try the page
-        if (target == null) { bar.Visible = false; status.Text = $"{files.Count} video file(s) found"; return; }
+        if (target == null) { ShowFiles(files); bar.Visible = false; status.Text = $"{files.Count} video file(s) found"; return; }
         status.Text = "Finding all qualities…";
         try
         {
@@ -117,7 +117,7 @@ public class VideoForm : Form
         {
             if (IsDisposed || cts.IsCancellationRequested) return;
             bar.Visible = false;
-            if (files.Count > 0) { if (site) ShowFiles(files); status.Text = $"{files.Count} video file(s) found"; return; }
+            if (files.Count > 0) { ShowFiles(files); status.Text = $"{files.Count} video file(s) found"; return; }
             status.Text = "Could not read this page: " + e.Message;
             status.ForeColor = Theme.Red; status.Height = 60;
             if (fallbackLinks || !Ytdlp.IsVideoSite(pageUrl ?? ""))
