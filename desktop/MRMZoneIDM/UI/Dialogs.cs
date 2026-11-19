@@ -15,6 +15,7 @@ public static class Prompt
         var ok = Theme.Btn("OK", true, 100); ok.Location = new Point(334, 96); ok.DialogResult = DialogResult.OK;
         var c = Theme.Btn("Cancel", false, 100); c.Location = new Point(444, 96); c.DialogResult = DialogResult.Cancel;
         f.Controls.AddRange(new Control[] { l, tb, ok, c }); f.AcceptButton = ok; f.CancelButton = c;
+        Theme.Fit(f);
         return f.ShowDialog(owner) == DialogResult.OK ? tb.Text : null;
     }
 }
@@ -26,6 +27,7 @@ public class BusyForm : Form
         Text = "MRM Zone IDM"; Icon = Theme.AppIcon; Font = Theme.UiFont; ClientSize = new Size(380, 90); FormBorderStyle = FormBorderStyle.FixedDialog; ControlBox = false; StartPosition = FormStartPosition.CenterParent; BackColor = Color.White;
         Controls.Add(new Label { Text = text, AutoSize = true, Location = new Point(16, 16) });
         Controls.Add(new ProgressBar { Style = ProgressBarStyle.Marquee, Width = 348, Height = 14, Location = new Point(16, 50) });
+        Theme.Fit(this);
     }
 }
 
@@ -92,6 +94,7 @@ public class OptionsForm : Form
             Store.Save(s); App.MainWindow?.ReapplyStartup(); Manager.Schedule();
             Close();
         };
+        Theme.Fit(this);
     }
 }
 
@@ -132,6 +135,7 @@ public class SchedulerForm : Form
             MessageBox.Show(this, s.SchedEnabled ? $"The queue will start at {t1.Value:hh:mm tt} on the selected days.\nKeep MRM Zone IDM running (it can stay in the tray)." : "Scheduler is off.", "Scheduler");
             Close();
         };
+        Theme.Fit(this);
     }
 }
 
@@ -159,6 +163,7 @@ public class LinksForm : Form
         allB.Click += (_, _) => { bool v = box.CheckedItems.Count < box.Items.Count; for (int i = 0; i < box.Items.Count; i++) box.SetItemChecked(i, v); };
         go.Click += (_, _) => AddSel(true); q.Click += (_, _) => AddSel(false);
         Fill();
+        Theme.Fit(this);
     }
 
     void Fill()
@@ -223,6 +228,7 @@ public class GrabberForm : Form
             catch (Exception ex) { st.Text = "Error: " + ex.Message; }
             finally { scan.Enabled = true; }
         };
+        Theme.Fit(this);
     }
 
     static readonly Regex LinkRe = new(@"(?:href|src|data-src|content)\s*=\s*[""']([^""'#]+)[""']", RegexOptions.IgnoreCase);
@@ -292,6 +298,7 @@ public class BatchForm : Form
         u.TextChanged += (_, _) => Upd(); from.TextChanged += (_, _) => Upd(); to.TextChanged += (_, _) => Upd(); w.ValueChanged += (_, _) => Upd(); Upd();
         void Add(bool start) { var l = Expand(); if (l.Count == 0) return; LinksForm.AddMany(l, start, null); Close(); }
         go.Click += (_, _) => Add(true); q.Click += (_, _) => Add(false);
+        Theme.Fit(this);
     }
 }
 
@@ -330,6 +337,7 @@ public class PropertiesForm : Form
             d.Description = desc.Text;
             Manager.Update(d); Close();
         };
+        Theme.Fit(this);
     }
 }
 
@@ -461,5 +469,42 @@ public class ExtensionForm : Form
         }
         timer.Tick += (_, _) => Upd(); timer.Start(); Upd();
         FormClosed += (_, _) => timer.Dispose();
+        Theme.Fit(this);
+    }
+}
+
+/// <summary>Branded About window (replaces the plain message box).</summary>
+public class AboutForm : Form
+{
+    public AboutForm()
+    {
+        Text = "About MRM Zone IDM"; Icon = Theme.AppIcon; Font = Theme.UiFont; BackColor = Color.White;
+        FormBorderStyle = FormBorderStyle.FixedDialog; MaximizeBox = false; MinimizeBox = false; StartPosition = FormStartPosition.CenterParent;
+        ClientSize = new Size(520, 430);
+        var top = new Panel { Dock = DockStyle.Top, Height = 150, BackColor = Theme.Bar };
+        top.Controls.Add(new PictureBox { Image = Theme.Logo, SizeMode = PictureBoxSizeMode.Zoom, Size = new Size(96, 96), Location = new Point(24, 27) });
+        top.Controls.Add(new Label { Text = "MRM Zone IDM", ForeColor = Color.White, Font = new Font("Segoe UI", 18f, FontStyle.Bold), AutoSize = true, Location = new Point(138, 34) });
+        top.Controls.Add(new Label { Text = "Internet Download Manager", ForeColor = Color.FromArgb(0xB8, 0xC4, 0xD6), Font = new Font("Segoe UI", 10.5f), AutoSize = true, Location = new Point(141, 72) });
+        top.Controls.Add(new Label { Text = "Version " + App.Version, ForeColor = Color.FromArgb(0xFF, 0xC8, 0x3C), Font = new Font("Segoe UI Semibold", 9.5f), AutoSize = true, Location = new Point(142, 100) });
+        Controls.Add(top);
+        int y = 168;
+        foreach (var f in new[] {
+            "Up to 32 connections per file, pause / resume, resume after restart",
+            "YouTube, Facebook & 1000+ sites in every quality, MP3 / M4A",
+            "Chrome / Edge extension: catch downloads & 'Download this video'",
+            "Queue, scheduler, speed limiter, site grabber, batch download" })
+        {
+            Controls.Add(new Label { Text = "✓", ForeColor = Theme.Green, Font = new Font("Segoe UI Semibold", 10f), AutoSize = true, Location = new Point(26, y) });
+            Controls.Add(new Label { Text = f, AutoSize = false, Width = 450, Height = 22, Location = new Point(48, y + 1) });
+            y += 28;
+        }
+        y += 8;
+        Controls.Add(new Label { Text = "Files are saved in", ForeColor = Theme.Gray, AutoSize = true, Location = new Point(26, y) }); y += 20;
+        Controls.Add(new Label { Text = App.Settings.BaseFolder, AutoSize = false, AutoEllipsis = true, Width = 470, Height = 22, Location = new Point(26, y), Font = new Font("Segoe UI Semibold", 9f) });
+        var folder = Theme.Btn("Open download folder", false, 180); folder.Location = new Point(26, 376);
+        folder.Click += (_, _) => { Directory.CreateDirectory(App.Settings.BaseFolder); Theme.Open(App.Settings.BaseFolder); };
+        var ok = Theme.Btn("OK", true, 100); ok.Location = new Point(400, 376); ok.DialogResult = DialogResult.OK;
+        Controls.Add(folder); Controls.Add(ok); AcceptButton = ok; CancelButton = ok;
+        Theme.Fit(this);
     }
 }

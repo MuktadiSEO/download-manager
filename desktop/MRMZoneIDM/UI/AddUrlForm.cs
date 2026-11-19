@@ -62,6 +62,7 @@ public class AddUrlForm : Form
         url.Text = u ?? "";
         Shown += (_, _) => { TopMost = false; Activate(); if (url.Text.Length == 0) url.Focus(); };
         FormClosed += (_, _) => { debounce.Stop(); debounce.Dispose(); probeCts?.Cancel(); };
+        Theme.Fit(this);
     }
 
     async void Probe()

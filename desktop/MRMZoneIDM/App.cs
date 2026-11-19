@@ -23,7 +23,7 @@ public static class App
         // All forms are laid out in fixed 96-DPI pixel coordinates without AutoScaleMode, so per-monitor
         // awareness would scale fonts but not positions (clipped/overlapping text at 125-150 %).
         // Let Windows scale the GDI output instead (crisp text, correct layout).
-        Application.SetHighDpiMode(HighDpiMode.DpiUnawareGdiScaled);
+        Application.SetHighDpiMode(HighDpiMode.SystemAware); // crisp text; layouts scaled by Theme.Fit
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
         Application.ThreadException += (_, e) => LogError(e.Exception);

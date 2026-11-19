@@ -13,12 +13,12 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
-    <ApplicationHighDpiMode>DpiUnawareGdiScaled</ApplicationHighDpiMode>
+    <ApplicationHighDpiMode>SystemAware</ApplicationHighDpiMode>
     <AssemblyName>MRMZoneIDM</AssemblyName>
     <RootNamespace>MRMZoneIDM</RootNamespace>
     <Product>MRM Zone Internet Download Manager</Product>
     <Company>MRM Zone</Company>
-    <Version>1.0.5</Version>
+    <Version>1.1.0</Version>
     <InvariantGlobalization>false</InvariantGlobalization>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
   </PropertyGroup>

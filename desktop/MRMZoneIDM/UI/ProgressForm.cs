@@ -43,7 +43,7 @@ public class ProgressForm : Form
         bar.Location = new Point(20, y + 6); Controls.Add(bar); y += 34;
         Controls.Add(new Label { Text = "Start positions and download progress by connections", AutoSize = true, ForeColor = Theme.Gray, Location = new Point(20, y) }); y += 20;
         seg.Location = new Point(20, y); Controls.Add(seg); y += 30;
-        conns.Columns.Add("N.", 40); conns.Columns.Add("Downloaded", 120); conns.Columns.Add("Info", 380);
+        conns.Columns.Add("N.", Theme.S(40)); conns.Columns.Add("Downloaded", Theme.S(120)); conns.Columns.Add("Info", Theme.S(380));
         conns.Location = new Point(20, y); Controls.Add(conns);
         try { typeof(Control).GetProperty("DoubleBuffered", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.SetValue(conns, true); } catch { } y += 140;
         limit.Location = new Point(20, y + 6); limitVal.Location = new Point(160, y + 3);
@@ -69,6 +69,7 @@ public class ProgressForm : Form
         t.Tick += (_, _) => Render();
         t.Start(); Render();
         FormClosed += (_, _) => { t.Stop(); t.Dispose(); if (Open.TryGetValue(id, out var o) && o == this) Open.Remove(id); };
+        Theme.Fit(this);
     }
 
     static void SetText(ListViewItem.ListViewSubItem it, string v) { if (it.Text != v) it.Text = v; }
@@ -166,5 +167,6 @@ public class CompleteForm : Form
         close.Click += (_, _) => Done();
         AcceptButton = open; CancelButton = close;
         Shown += (_, _) => { System.Media.SystemSounds.Asterisk.Play(); };
+        Theme.Fit(this);
     }
 }

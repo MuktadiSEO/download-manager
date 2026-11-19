@@ -8,11 +8,10 @@ namespace MRMZoneIDM.UI;
 public class MainForm : Form
 {
     readonly ListView list = new() { View = View.Details, FullRowSelect = true, Dock = DockStyle.Fill, HideSelection = false, BorderStyle = BorderStyle.None, Font = Theme.UiFont };
-    readonly TreeView tree = new() { Dock = DockStyle.Fill, BorderStyle = BorderStyle.None, Font = Theme.UiFont, HideSelection = false, ShowLines = false, ItemHeight = 26 };
+    readonly TreeView tree = new() { Dock = DockStyle.Fill, BorderStyle = BorderStyle.None, Font = Theme.UiFont, HideSelection = false, ShowLines = false, ItemHeight = Theme.S(26) };
     readonly ToolStripStatusLabel stSpeed = new(), stActive = new(), stExt = new() { Spring = true, TextAlign = ContentAlignment.MiddleRight, IsLink = true };
     readonly NotifyIcon tray = new();
     readonly System.Windows.Forms.Timer ui = new() { Interval = 500 };
-    readonly Label extLink = new() { AutoSize = true, ForeColor = Color.FromArgb(0xFF, 0xC8, 0x3C), Cursor = Cursors.Hand, Font = new Font("Segoe UI Semibold", 9.5f) };
     string filter = "all";
     string search = "";
     readonly bool startHidden;
@@ -26,11 +25,12 @@ public class MainForm : Form
         this.startHidden = startHidden;
         Text = "MRM Zone Internet Download Manager";
         Icon = Theme.AppIcon;
-        Size = new Size(1150, 680); MinimumSize = new Size(800, 450);
+        Size = new Size(1100, 640); MinimumSize = new Size(760, 420);
         StartPosition = FormStartPosition.CenterScreen;
         Font = Theme.UiFont;
         BackColor = Color.White;
         BuildUi();
+        Theme.Fit(this);
         Manager.Changed += () => changed = true;
         Manager.Completed += d => BeginInvokeSafe(() => OnCompleted(d));
         Manager.Failed += d => BeginInvokeSafe(() => tray.ShowBalloonTip(4000, "Download failed", d.FileName + "\n" + d.Error, ToolTipIcon.Error));
@@ -78,10 +78,6 @@ public class MainForm : Form
         DoubleBuffer(list); DoubleBuffer(tree);
         // header
         var header = Theme.Header("MRM Zone IDM", "Internet Download Manager  •  v" + App.Version);
-        extLink.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        extLink.Click += (_, _) => new ExtensionForm().ShowDialog(this);
-        header.Controls.Add(extLink);
-        header.Resize += (_, _) => extLink.Location = new Point(header.Width - extLink.Width - 16, 22);
 
         // menu
         var menu = new MenuStrip { Font = Theme.UiFont, BackColor = Color.White };
@@ -110,10 +106,10 @@ public class MainForm : Form
         menu.Items.AddRange(new ToolStripItem[] { mTasks, mFile, mHelp });
 
         // toolbar (IDM style)
-        var tb = new ToolStrip { ImageScalingSize = new Size(30, 30), GripStyle = ToolStripGripStyle.Hidden, BackColor = Color.FromArgb(0xF6, 0xF8, 0xFB), Padding = new Padding(6, 4, 6, 4), Font = new Font("Segoe UI", 9f), RenderMode = ToolStripRenderMode.System };
+        var tb = new ToolStrip { ImageScalingSize = Theme.S(26, 26), GripStyle = ToolStripGripStyle.Hidden, BackColor = Color.FromArgb(0xF6, 0xF8, 0xFB), Padding = new Padding(6, 4, 6, 4), Font = new Font("Segoe UI", 9f), RenderMode = ToolStripRenderMode.System };
         void T(string text, string glyph, Color c, Action a)
         {
-            var b = new ToolStripButton(text, Theme.Glyph(glyph, c, 30), (_, _) => a()) { TextImageRelation = TextImageRelation.ImageAboveText, AutoSize = false, Width = 78, Height = 62 };
+            var b = new ToolStripButton(text, Theme.Glyph(glyph, c, 26), (_, _) => a()) { TextImageRelation = TextImageRelation.ImageAboveText, ImageScaling = ToolStripItemImageScaling.None, Padding = new Padding(Theme.S(7), Theme.S(2), Theme.S(7), Theme.S(2)) };
             tb.Items.Add(b);
         }
         T("Add URL", Theme.GAdd, Theme.Orange, () => OpenAdd(null));
@@ -122,24 +118,24 @@ public class MainForm : Form
         T("Stop", Theme.GPause, Theme.Blue, () => ForSelected(d => Manager.Pause(d.Id)));
         T("Stop All", Theme.GStop, Theme.Red, Manager.PauseAll);
         T("Delete", Theme.GDelete, Theme.Red, DeleteSelected);
-        T("Delete C…", Theme.GBroom, Theme.Blue, ConfirmDeleteCompleted);
+        T("Delete Completed", Theme.GBroom, Theme.Blue, ConfirmDeleteCompleted);
         tb.Items.Add(new ToolStripSeparator());
         T("Options", Theme.GSettings, Theme.Gray, () => new OptionsForm().ShowDialog(this));
         T("Scheduler", Theme.GClock, Theme.Blue, () => new SchedulerForm().ShowDialog(this));
-        T("Start Qu…", Theme.GQueuePlay, Theme.Green, Manager.StartQueue);
-        T("Stop Qu…", Theme.GQueueStop, Theme.Red, Manager.StopQueue);
+        T("Start Queue", Theme.GQueuePlay, Theme.Green, Manager.StartQueue);
+        T("Stop Queue", Theme.GQueueStop, Theme.Red, Manager.StopQueue);
         tb.Items.Add(new ToolStripSeparator());
         T("Grabber", Theme.GGlobe, Theme.Blue, () => new GrabberForm().Show(this));
         T("Batch", Theme.GBatch, Theme.Blue, () => new BatchForm().ShowDialog(this));
         T("Extension", Theme.GPuzzle, Theme.Orange, () => new ExtensionForm().ShowDialog(this));
-        T("Tell a Fr…", Theme.GShare, Theme.Gray, () => { if (TrySetClipboard("MRM Zone Internet Download Manager — fast downloads, YouTube in all qualities!")) MessageBox.Show(this, "Message copied — paste it to your friends!", "Tell a friend"); });
-        var searchBox = new ToolStripTextBox { Alignment = ToolStripItemAlignment.Right, Width = 180, ToolTipText = "Search downloads" };
+        T("Tell a Friend", Theme.GShare, Theme.Gray, () => { if (TrySetClipboard("MRM Zone Internet Download Manager — fast downloads, YouTube in all qualities!")) MessageBox.Show(this, "Message copied — paste it to your friends!", "Tell a friend"); });
+        var searchBox = new ToolStripTextBox { Alignment = ToolStripItemAlignment.Right, AutoSize = false, Width = Theme.S(190), ToolTipText = "Search downloads" };
+        searchBox.TextBox.PlaceholderText = "Search downloads";
         searchBox.TextChanged += (_, _) => { search = searchBox.Text; changed = true; };
         tb.Items.Add(searchBox);
-        tb.Items.Add(new ToolStripLabel("🔍") { Alignment = ToolStripItemAlignment.Right });
 
         // tree
-        var imgs = new ImageList { ImageSize = new Size(18, 18), ColorDepth = ColorDepth.Depth32Bit };
+        var imgs = new ImageList { ImageSize = Theme.S(18, 18), ColorDepth = ColorDepth.Depth32Bit };
         imgs.Images.Add("all", Theme.Glyph(Theme.GDownload, Theme.Blue, 18));
         foreach (var c in Categories.Names) { var (g, col) = Theme.Cat(c); imgs.Images.Add(c, Theme.Badge(g, col, 18)); }
         imgs.Images.Add("unf", Theme.Glyph(Theme.GPause, Theme.Orange, 18));
@@ -159,9 +155,9 @@ public class MainForm : Form
         tree.AfterSelect += (_, e) => { filter = e.Node.Tag as string ?? "all"; changed = true; };
 
         // list
-        list.Columns.Add("File Name", 360); list.Columns.Add("Size", 90, HorizontalAlignment.Right); list.Columns.Add("Status", 130);
-        list.Columns.Add("Time left", 95); list.Columns.Add("Transfer rate", 105); list.Columns.Add("Last Try Date", 160); list.Columns.Add("Description", 220);
-        var small = new ImageList { ImageSize = new Size(20, 20), ColorDepth = ColorDepth.Depth32Bit };
+        list.Columns.Add("File Name", Theme.S(380)); list.Columns.Add("Size", Theme.S(85), HorizontalAlignment.Right); list.Columns.Add("Status", Theme.S(125));
+        list.Columns.Add("Time left", Theme.S(90)); list.Columns.Add("Transfer rate", Theme.S(100)); list.Columns.Add("Last Try Date", Theme.S(150)); list.Columns.Add("Description", Theme.S(240));
+        var small = new ImageList { ImageSize = Theme.S(20, 20), ColorDepth = ColorDepth.Depth32Bit };
         foreach (var c in Categories.Names) { var (g, col) = Theme.Cat(c); small.Images.Add(c, Theme.Badge(g, col, 20)); }
         list.SmallImageList = small;
         list.DoubleClick += (_, _) => { var d = Selected().FirstOrDefault(); if (d != null) OpenItem(d); };
@@ -187,7 +183,7 @@ public class MainForm : Form
         Controls.Add(header);
         Controls.Add(status);
         MainMenuStrip = menu;
-        Load += (_, _) => { try { split.SplitterDistance = 210; } catch { } };
+        Load += (_, _) => { try { split.SplitterDistance = Theme.S(205); } catch { } };
 
         // tray
         tray.Icon = Theme.AppIcon; tray.Text = "MRM Zone IDM"; tray.Visible = true;
@@ -301,12 +297,6 @@ public class MainForm : Form
         var connected = LocalServer.ExtensionConnected;
         var extText = connected ? "✓ Browser extension connected" : "Browser extension not connected — click to install";
         if (stExt.Text != extText) stExt.Text = extText;
-        var linkText = connected ? "✓ Browser extension connected" : "⚡ Install browser extension";
-        if (extLink.Text != linkText)
-        {
-            extLink.Text = linkText;
-            if (extLink.Parent != null) extLink.Location = new Point(extLink.Parent.Width - extLink.Width - 16, 22);
-        }
         tray.Text = Manager.RunningCount > 0 ? $"MRM Zone IDM — {Manager.RunningCount} downloading, {Fmt.Speed(Manager.TotalSpeed)}" : "MRM Zone IDM";
     }
 
@@ -341,6 +331,7 @@ public class MainForm : Form
         var ok = Theme.Btn("Delete", true); ok.Location = new Point(190, 95); ok.DialogResult = DialogResult.OK;
         var cancel = Theme.Btn("Cancel"); cancel.Location = new Point(300, 95); cancel.DialogResult = DialogResult.Cancel;
         f.Controls.AddRange(new Control[] { l, cb, ok, cancel }); f.AcceptButton = ok; f.CancelButton = cancel;
+        Theme.Fit(f);
         if (f.ShowDialog(this) == DialogResult.OK) s.ForEach(d => Manager.Delete(d.Id, cb.Checked));
     }
 
@@ -481,12 +472,7 @@ public class MainForm : Form
         });
     }
 
-    void About() => MessageBox.Show(this,
-        $"MRM Zone Internet Download Manager  v{App.Version}\n\n" +
-        "• Up to 32 connections per file with dynamic segmentation\n• Pause / resume, auto-retry, resume after restart\n" +
-        "• YouTube & 1000+ sites in every quality (yt-dlp + FFmpeg)\n• Chrome / Edge extension: catch downloads & 'Download this video'\n" +
-        "• Queue, scheduler, speed limiter, site grabber, batch download\n\nFiles are saved in:\n" + App.Settings.BaseFolder,
-        "About MRM Zone IDM", MessageBoxButtons.OK, MessageBoxIcon.Information);
+    void About() => new AboutForm().ShowDialog(this);
 
     bool TrySetClipboard(string text)
     {

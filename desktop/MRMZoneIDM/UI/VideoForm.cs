@@ -39,9 +39,10 @@ public class VideoForm : Form
         FormClosed += (_, _) => cts.Cancel();
         Shown += (_, _) => { TopMost = false; Activate(); Load2(); };
         Resize += (_, _) => FitRows();
+        Theme.Fit(this);
     }
 
-    void FitRows() { foreach (Control c in rows.Controls) c.Width = rows.ClientSize.Width - 36; }
+    void FitRows() { foreach (Control c in rows.Controls) c.Width = rows.ClientSize.Width - Theme.S(36); }
 
     string Target(out string tRef, out string tCookies)
     {
@@ -119,14 +120,14 @@ public class VideoForm : Form
             bar.Visible = false;
             if (files.Count > 0) { ShowFiles(files); status.Text = $"{files.Count} video file(s) found"; return; }
             status.Text = "Could not read this page: " + e.Message;
-            status.ForeColor = Theme.Red; status.Height = 60;
+            status.ForeColor = Theme.Red; status.Height = Theme.S(60);
             if (fallbackLinks || !Ytdlp.IsVideoSite(pageUrl ?? ""))
             {
-                var b = Theme.Btn("Find downloadable files on this page", true, 300);
+                var b = Theme.Btn("Find downloadable files on this page", true, 300); b.Size = Theme.S(300, 34);
                 b.Click += (_, _) => { new GrabberForm(pageUrl).Show(); Close(); };
                 rows.Controls.Add(b);
             }
-            var u = Theme.Btn("Update video engine & retry", false, 260);
+            var u = Theme.Btn("Update video engine & retry", false, 260); u.Size = Theme.S(260, 34);
             u.Click += async (_, _) => { status.Text = "Updating yt-dlp…"; bar.Visible = true; await Task.Run(() => { try { Tools.Update(); } catch { } }); status.ForeColor = Theme.Gray; Load2(); };
             rows.Controls.Add(u);
         }
@@ -134,14 +135,14 @@ public class VideoForm : Form
 
     static string Host(string u) { try { return new Uri(u).Host; } catch { return ""; } }
 
-    void Section(string t) => rows.Controls.Add(new Label { Text = t, AutoSize = false, Width = rows.ClientSize.Width - 36, Height = 28, Font = new Font("Segoe UI Semibold", 9f), ForeColor = Theme.Orange, TextAlign = ContentAlignment.BottomLeft });
+    void Section(string t) => rows.Controls.Add(new Label { Text = t, AutoSize = false, Width = rows.ClientSize.Width - Theme.S(36), Height = Theme.S(28), Font = new Font("Segoe UI Semibold", 9f), ForeColor = Theme.Orange, TextAlign = ContentAlignment.BottomLeft });
 
     void ShowInfo(VideoInfo info, string target, string tRef, string tCookies)
     {
         status.Text = $"{info.Qualities.Count} options found — click one to download";
         if (!string.IsNullOrEmpty(info.Thumbnail))
         {
-            var pic = new PictureBox { Width = rows.ClientSize.Width - 36, Height = 250, SizeMode = PictureBoxSizeMode.Zoom, BackColor = Color.Black };
+            var pic = new PictureBox { Width = rows.ClientSize.Width - Theme.S(36), Height = Theme.S(250), SizeMode = PictureBoxSizeMode.Zoom, BackColor = Color.Black };
             rows.Controls.Add(pic);
             Task.Run(async () =>
             {
@@ -151,7 +152,7 @@ public class VideoForm : Form
                 catch { try { BeginInvoke(() => pic.Visible = false); } catch { } }
             });
         }
-        rows.Controls.Add(new Label { Text = info.Title, AutoSize = false, Width = rows.ClientSize.Width - 36, Height = 48, Font = new Font("Segoe UI Semibold", 11.5f) });
+        rows.Controls.Add(new Label { Text = info.Title, AutoSize = false, Width = rows.ClientSize.Width - Theme.S(36), Height = Theme.S(48), Font = new Font("Segoe UI Semibold", 11f) });
         var meta = string.Join("  •  ", new[] { info.Uploader, info.Duration > 0 ? Fmt.Time(info.Duration) : null }.Where(x => !string.IsNullOrEmpty(x)));
         if (meta.Length > 0) rows.Controls.Add(new Label { Text = meta, AutoSize = true, ForeColor = Theme.Gray });
         bool vh = false, ah = false;
@@ -166,26 +167,26 @@ public class VideoForm : Form
 
     void AddRow(string label, string detail, long size, bool approx, bool audio, Action click)
     {
-        var p = new Panel { Width = rows.ClientSize.Width - 36, Height = 58, Margin = new Padding(0, 4, 0, 4), Cursor = Cursors.Hand, BackColor = Color.White };
+        var p = new Panel { Width = rows.ClientSize.Width - Theme.S(36), Height = Theme.S(58), Margin = new Padding(0, Theme.S(4), 0, Theme.S(4)), Cursor = Cursors.Hand, BackColor = Color.White };
         p.Paint += (_, e) =>
         {
             e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-            using var path = Theme.Rounded(new Rectangle(0, 0, p.Width - 1, p.Height - 1), 8);
+            using var path = Theme.Rounded(new Rectangle(0, 0, p.Width - 1, p.Height - 1), Theme.S(8));
             using var pen = new Pen(Color.FromArgb(0xD6, 0xDD, 0xE7));
             e.Graphics.DrawPath(pen, path);
         };
         var (g, col) = Theme.Cat(audio ? "Music" : "Video");
-        var icon = new PictureBox { Image = Theme.Badge(g, col, 34), Size = new Size(34, 34), Location = new Point(12, 12) };
-        var l1 = new Label { Text = label, Font = new Font("Segoe UI Semibold", 11f), AutoSize = false, AutoEllipsis = true, Height = 24, Location = new Point(56, 7) };
-        var l2 = new Label { Text = detail, ForeColor = Theme.Gray, AutoSize = false, AutoEllipsis = true, Height = 20, Location = new Point(57, 32) };
+        var icon = new PictureBox { Image = Theme.Badge(g, col, 34), Size = Theme.S(34, 34), Location = new Point(Theme.S(12), Theme.S(12)) };
+        var l1 = new Label { Text = label, Font = new Font("Segoe UI Semibold", 10.5f), AutoSize = false, AutoEllipsis = true, Height = Theme.S(24), Location = new Point(Theme.S(56), Theme.S(7)) };
+        var l2 = new Label { Text = detail, ForeColor = Theme.Gray, AutoSize = false, AutoEllipsis = true, Height = Theme.S(20), Location = new Point(Theme.S(57), Theme.S(32)) };
         var tip = new ToolTip(); tip.SetToolTip(l1, label);
         var sz = new Label { Text = size > 0 ? (approx ? "~" : "") + Fmt.Size(size) : "", Font = new Font("Segoe UI Semibold", 10f), AutoSize = true, Anchor = AnchorStyles.Right | AnchorStyles.Top };
-        var dl = Theme.Btn("Download", true, 100); dl.Height = 32; dl.Anchor = AnchorStyles.Right | AnchorStyles.Top;
+        var dl = Theme.Btn("Download", true, 100); dl.Size = Theme.S(100, 32); dl.Anchor = AnchorStyles.Right | AnchorStyles.Top;
         p.Controls.AddRange(new Control[] { icon, l1, l2, sz, dl });
         void Lay()
         {
-            dl.Location = new Point(p.Width - 112, 13); sz.Location = new Point(dl.Left - sz.Width - 12, 19);
-            int w = Math.Max(60, (sz.Width > 0 ? sz.Left : dl.Left) - 12 - 56);
+            dl.Location = new Point(p.Width - Theme.S(112), Theme.S(13)); sz.Location = new Point(dl.Left - sz.Width - Theme.S(12), Theme.S(19));
+            int w = Math.Max(Theme.S(60), (sz.Width > 0 ? sz.Left : dl.Left) - Theme.S(12 + 56));
             l1.Width = w; l2.Width = w;
         }
         p.Resize += (_, _) => Lay(); sz.SizeChanged += (_, _) => Lay(); Lay();

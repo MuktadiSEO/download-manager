@@ -12,8 +12,19 @@ public static class Theme
     public static readonly Color Red = Color.FromArgb(0xD3, 0x2F, 0x2F);
     public static readonly Color Gray = Color.FromArgb(0x6B, 0x72, 0x80);
     public static readonly Color SegBg = Color.FromArgb(0xDC, 0xE3, 0xEC);
-    public static readonly Font UiFont = new("Segoe UI", 9.5f);
-    public static readonly Font Bold = new("Segoe UI Semibold", 10f);
+    public static readonly Font UiFont = new("Segoe UI", 9f);
+    public static readonly Font Bold = new("Segoe UI Semibold", 9.5f);
+
+    /// <summary>Screen scale (1.0 = 100%, 1.5 = 150%). Layouts are written for 100% and scaled with Fit / S.</summary>
+    public static readonly float K = ComputeK();
+    static float ComputeK()
+    {
+        try { using var g = Graphics.FromHwnd(IntPtr.Zero); return Math.Clamp(g.DpiX / 96f, 1f, 4f); } catch { return 1f; }
+    }
+    public static int S(int v) => (int)Math.Round(v * K);
+    public static Size S(int w, int h) => new(S(w), S(h));
+    /// <summary>Scale a form written in 100% pixels to the screen's DPI (fonts are already DPI-sized).</summary>
+    public static void Fit(Form f) { if (K > 1.01f) f.Scale(new SizeF(K, K)); }
     public static readonly Font Title = new("Segoe UI", 14f, FontStyle.Bold);
 
     static Image logo;
@@ -53,6 +64,7 @@ public static class Theme
 
     public static Bitmap Glyph(string glyph, Color color, int size)
     {
+        size = S(size);
         var bmp = new Bitmap(size, size);
         using var g = Graphics.FromImage(bmp);
         g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
@@ -66,6 +78,7 @@ public static class Theme
     /// <summary>Category badge: rounded colored square with a white glyph.</summary>
     public static Bitmap Badge(string glyph, Color bg, int size)
     {
+        size = S(size);
         var bmp = new Bitmap(size, size);
         using var g = Graphics.FromImage(bmp);
         g.SmoothingMode = SmoothingMode.AntiAlias;
