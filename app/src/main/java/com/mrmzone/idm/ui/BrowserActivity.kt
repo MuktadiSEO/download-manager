@@ -106,6 +106,7 @@ class BrowserActivity : AppCompatActivity() {
             }
         }
         top.addView(address, LinearLayout.LayoutParams(0, -2, 1f))
+        top.addView(iconBtn(R.drawable.ic_add) { blankTab() }.apply { contentDescription = "New tab" })
         shield = TextView(this).apply {
             setTextColor(0xFFFFFFFF.toInt()); textSize = 12f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER
             setPadding((8 * dp).toInt(), (4 * dp).toInt(), (8 * dp).toInt(), (4 * dp).toInt())
@@ -335,13 +336,13 @@ class BrowserActivity : AppCompatActivity() {
                 t.sniffer.clear(); t.files = emptyList()
                 t.pageUrl = url; t.blocked = 0
                 t.adOn = AdBlock.enabledFor(DM.prefs, url)
-                if (view == tab.web) { address.setText(url); updateFab(); updateShield() }
+                if (view == tab.web) { if (url != "about:blank") address.setText(url); updateFab(); updateShield() }
             }
             override fun onPageFinished(view: WebView, url: String) { scan(t); if (t.group != 0 && cur in tabs.indices && tab.group == t.group) updateGroupBar() }
             override fun doUpdateVisitedHistory(view: WebView, url: String, isReload: Boolean) {
                 // single-page sites (YouTube) change URL without reloading
                 t.pageUrl = url
-                if (view == tab.web && !address.hasFocus()) address.setText(url)
+                if (view == tab.web && !address.hasFocus() && url != "about:blank") address.setText(url)
                 if (view == tab.web) updateFab()
                 view.postDelayed({ scan(t) }, 1500)
             }
@@ -419,7 +420,7 @@ class BrowserActivity : AppCompatActivity() {
         content.addView(tab.web, 0, FrameLayout.LayoutParams(-1, -1))
         tab.web.onResume()
         tab.pendingUrl?.let { p -> tab.pendingUrl = null; load(tab, p) }
-        address.setText(tab.url.orEmpty())
+        address.setText(tab.url.orEmpty().takeIf { it != "about:blank" }.orEmpty())
         updateShield()
         tabCount.text = tabs.size.toString()
         updateFab()
@@ -495,7 +496,7 @@ class BrowserActivity : AppCompatActivity() {
         tabs.removeAt(i)
         t.web.destroy()
         if (tabs.isEmpty()) { cur = -1; newTab(DM.prefs.homePage); return }
-        if (wasCurrent) { cur = -1; switchTo(minOf(i, tabs.size - 1)) }
+        if (wasCurrent) { cur = -1; switchTo((i - 1).coerceIn(0, tabs.size - 1)) }   // like Chrome: the tab before it
         else { if (i < cur) cur--; tabCount.text = tabs.size.toString(); updateFab(); updateGroupBar() }
         saveTabs()
     }
@@ -508,8 +509,9 @@ class BrowserActivity : AppCompatActivity() {
                 orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
                 setPadding((10 * dp).toInt(), (8 * dp).toInt(), 0, (8 * dp).toInt())
                 background = GradientDrawable().apply {
-                    cornerRadius = 10 * dp
-                    setColor(ContextCompat.getColor(context, if (i == cur) R.color.seg_bg else R.color.surface))
+                    cornerRadius = 12 * dp
+                    setColor(if (i == cur) 0xFFFFFFFF.toInt() else 0xFF3A3F48.toInt())   // dark tabs, the open one white
+                    if (i == cur) setStroke((2 * dp).toInt(), ContextCompat.getColor(context, R.color.brand_orange))
                 }
                 setOnClickListener { switchTo(i); dlg?.dismiss() }
             }
@@ -517,26 +519,56 @@ class BrowserActivity : AppCompatActivity() {
                 background = GradientDrawable().apply { cornerRadius = 3 * dp; setColor(groupColor(t.group)) }
             }, LinearLayout.LayoutParams((5 * dp).toInt(), (34 * dp).toInt()).apply { marginEnd = (8 * dp).toInt() })
             val txt = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-            txt.addView(TextView(this).apply { text = t.web.title?.ifBlank { null } ?: t.url ?: "New tab"; textSize = 15f; maxLines = 1; setTypeface(typeface, Typeface.BOLD) })
-            txt.addView(TextView(this).apply { text = t.url.orEmpty(); textSize = 12f; maxLines = 1; setTextColor(ContextCompat.getColor(context, R.color.text_secondary)) })
+            val active = i == cur
+            txt.addView(TextView(this).apply {
+                text = t.web.title?.ifBlank { null }?.takeIf { it != "about:blank" } ?: t.url?.takeIf { it != "about:blank" } ?: "New tab"
+                textSize = 15f; maxLines = 1; setTypeface(typeface, Typeface.BOLD)
+                setTextColor(if (active) 0xFF111111.toInt() else 0xFFFFFFFF.toInt())
+            })
+            txt.addView(TextView(this).apply {
+                text = t.url.orEmpty().takeIf { it != "about:blank" }.orEmpty(); textSize = 12f; maxLines = 1
+                setTextColor(if (active) 0xFF555B66.toInt() else 0xFFB0B6C0.toInt())
+            })
             row.addView(txt, LinearLayout.LayoutParams(0, -2, 1f))
             row.addView(ImageButton(this).apply {
                 setImageResource(R.drawable.ic_close); background = null
+                setColorFilter(if (active) 0xFF333333.toInt() else 0xFFFFFFFF.toInt())
                 setOnClickListener { closeTab(i); dlg?.dismiss(); showTabs() }
             }, LinearLayout.LayoutParams((44 * dp).toInt(), (44 * dp).toInt()))
             list.addView(row, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = (6 * dp).toInt() })
         }
-        dlg = MaterialAlertDialogBuilder(this).setTitle("Tabs (${tabs.size})")
+        dlg = MaterialAlertDialogBuilder(this)
+            .setCustomTitle(TextView(this).apply {
+                text = "Tabs (${tabs.size})"; textSize = 22f; setTextColor(0xFFFFFFFF.toInt())
+                setPadding((24 * dp).toInt(), (20 * dp).toInt(), (24 * dp).toInt(), (8 * dp).toInt())
+            })
+            .setBackground(GradientDrawable().apply { cornerRadius = 28 * dp; setColor(ContextCompat.getColor(this@BrowserActivity, R.color.bar)) })
             .setView(ScrollView(this).apply { addView(list) })
             .setPositiveButton("+ New tab") { _, _ -> newTab(DM.prefs.homePage) }
             .setNegativeButton("Close", null).show()
+        // light buttons on the dark dialog
+        listOf(AlertDialog.BUTTON_POSITIVE, AlertDialog.BUTTON_NEGATIVE).forEach { dlg?.getButton(it)?.setTextColor(0xFFFFFFFF.toInt()) }
+        // scroll so the open tab is visible
+        list.post { list.getChildAt(cur)?.let { (list.parent as? ScrollView)?.smoothScrollTo(0, it.top) } }
+    }
+
+    /** "+" next to the address bar: a new empty tab, ready to type an address. */
+    private fun blankTab() {
+        val t = createWebView()
+        tabs.add(cur + 1, t)
+        switchTo(cur + 1)
+        t.web.loadUrl("about:blank")
+        address.setText("")
+        address.requestFocus()
+        (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).showSoftInput(address, InputMethodManager.SHOW_IMPLICIT)
+        saveTabs()
     }
 
     // ---------------- navigation ----------------
     private fun load(t: Tab, input: String) {
         val s = input.trim()
         val url = when {
-            s.startsWith("http://") || s.startsWith("https://") -> s
+            s.startsWith("http://") || s.startsWith("https://") || s == "about:blank" -> s
             s.contains('.') && !s.contains(' ') -> "https://$s"
             else -> "https://www.google.com/search?q=" + android.net.Uri.encode(s)
         }
